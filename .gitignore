@@ -49,9 +49,4 @@ Thumbs.db
 
 # Whisper/llama builds (rebuilt from source)
 third_party/build/
-
-# codemax
-.codemax/
-prompt.txt
-third_party/
 llm_vl_testing/
