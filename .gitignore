@@ -1,0 +1,57 @@
+# Build directories
+build/
+cmake-build-*/
+out/
+dist/
+
+# Compiled files
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+CMakeLists.txt.user
+
+# Model files (large binary files)
+*.gguf
+*.ggml
+*.bin
+models/
+
+# Database files
+*.db
+*.db-journal
+
+# Cache directories
+.cache/
+__pycache__/
+
+# Logs
+logs/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.bak
+*.orig
+
+# Whisper/llama builds (rebuilt from source)
+third_party/build/
+
+# codemax
+.codemax/
+prompt.txt
+third_party/
+llm_vl_testing/
