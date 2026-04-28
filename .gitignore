@@ -47,6 +47,10 @@ Thumbs.db
 *.bak
 *.orig
 
-# Whisper/llama builds (rebuilt from source)
-third_party/build/
+# Third-party dependencies (local build only, not tracked in git)
+third_party/
 llm_vl_testing/
+
+# Binary releases (built and uploaded separately)
+packaging/releases/*.tar.gz
+packaging/releases/[0-9]*

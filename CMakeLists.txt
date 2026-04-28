@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(Lucid VERSION 0.4.0 LANGUAGES C CXX)
+project(Lucid VERSION 0.4.1 LANGUAGES C CXX)
 
 # ============================================================================
 # Force static libraries for all third-party deps (no LD_LIBRARY_PATH needed)
