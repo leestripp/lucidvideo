@@ -6,6 +6,7 @@
 #include "semantic_search.hpp"
 #include "../inference/embedding_store.hpp"
 #include "../model/database.hpp"
+#include "../settings/app_settings.hpp"
 #include "../logging.hpp"
 
 #include <algorithm>
@@ -35,7 +36,7 @@ struct SemanticSearch::EmbeddingStoreImpl {
         context_size = ctx_size;
         store.set_num_threads(4);
         store.set_context_size(context_size);
-        // Note: use_gpu parameter passed during init, not stored in struct
+        store.set_use_gpu(AppSettings::instance().get_use_gpu());
         
         if (!store.initialize(model_path)) {
             LUCID_ERROR("[SemanticSearch] Failed to init EmbeddingStore");

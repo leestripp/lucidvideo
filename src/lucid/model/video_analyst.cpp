@@ -4,6 +4,7 @@
 
 #include "video_analyst.hpp"
 #include "../ffmpeg/thumbnail_generator.hpp"
+#include "../settings/app_settings.hpp"
 #include "../logging.hpp"
 
 #include <giomm.h>
@@ -474,7 +475,7 @@ void VideoAnalyst::generate_embedding(const std::string& video_id,
         embed_store = std::make_unique<lucid::EmbeddingStore>();
         embed_store->set_num_threads(4);
         embed_store->set_context_size(2048);
-        embed_store->set_use_gpu(false);
+        embed_store->set_use_gpu(AppSettings::instance().get_use_gpu());
         if (!embed_store->initialize(model_path)) {
             std::cerr << "[WARN] Failed to init embedding store" << std::endl;
             embed_store.reset();

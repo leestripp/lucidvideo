@@ -2,7 +2,7 @@
 Name=Lucid
 Comment=Intelligent video library with AI-powered search
 Exec=lucid
-Icon=lucid
+Icon=lucidvideo
 Terminal=false
 Type=Application
 Categories=AudioVideo;Video;Utility;

@@ -280,7 +280,7 @@ Glib::RefPtr<LucidApp> LucidApp::create() {
 }
 
 LucidApp::LucidApp()
-    : Gtk::Application("org.lucid.Lucid", Gio::Application::Flags::NON_UNIQUE) {
+    : Gtk::Application("org.lucidvideo.LucidVideo", Gio::Application::Flags::NON_UNIQUE) {
     
     LUCID_DEBUG("LucidApp constructing...");
     

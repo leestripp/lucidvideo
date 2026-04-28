@@ -248,16 +248,16 @@ message(STATUS "===========================================")
 set(ICON_SIZES 16 24 32 48 64 128 256 512)
 
 foreach(size IN LISTS ICON_SIZES)
-    install(FILES resources/icons/lucid-${size}.png
+    install(FILES resources/icons/lucidvideo-${size}.png
             DESTINATION share/icons/hicolor/${size}x${size}/apps
-            RENAME lucid.png
+            RENAME lucidvideo.png
     )
 endforeach()
 
 # Also install the SVG source
-install(FILES resources/icons/lucid-app.svg
+install(FILES resources/icons/lucidvideo-app.svg
         DESTINATION share/icons/hicolor/scalable/apps
-        RENAME lucid.svg
+        RENAME lucidvideo.svg
 )
 
 # Install index.theme for hicolor (optional but helps GTK discover icons)
@@ -366,6 +366,6 @@ else()
 endif()
 
 # Install desktop entry
-install(FILES data/lucid.desktop
+install(FILES data/lucidvideo.desktop
         DESTINATION share/applications
 )

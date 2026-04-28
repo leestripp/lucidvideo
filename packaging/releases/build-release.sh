@@ -33,8 +33,8 @@ fi
 # Copy files
 echo "Copying files..."
 cp "${BUILD_DIR}/lucidvideo" "$RELEASE_DIR/"
-cp "${PROJECT_ROOT}/data/lucid.desktop" "$RELEASE_DIR/"
-cp "${PROJECT_ROOT}/resources/icons/lucid-app.svg" "$RELEASE_DIR/lucid.svg"
+cp "${PROJECT_ROOT}/data/lucidvideo.desktop" "$RELEASE_DIR/"
+cp "${PROJECT_ROOT}/resources/icons/lucidvideo-app.svg" "$RELEASE_DIR/lucidvideo.svg"
 
 # Create tarball
 echo "Creating tarball..."
