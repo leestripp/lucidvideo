@@ -24,7 +24,36 @@
 extern "C" {
 #include <llama.h>
 }
-#endif
+
+// Vulkan device detection
+#ifdef GGML_USE_VULKAN
+#include <ggml-backend.h>
+
+// Check if Vulkan is actually usable (has proper GPU memory support)
+static bool vulkan_is_usable() {
+    ggml_backend_load_all();
+    
+    size_t count = ggml_backend_dev_count();
+    if (count == 0) {
+        std::cerr << "[WARN] EmbeddingStore: No GPU devices detected" << std::endl;
+        return false;
+    }
+    
+    std::cout << "[INFO] EmbeddingStore: Found " << count << " GPU device(s):" << std::endl;
+    for (size_t i = 0; i < count; i++) {
+        ggml_backend_dev_t dev = ggml_backend_dev_get(i);
+        std::cout << "  - " << ggml_backend_dev_name(dev) << std::endl;
+    }
+    
+    return true;
+}
+#else
+static bool vulkan_is_usable() {
+    return false;
+}
+#endif // GGML_USE_VULKAN
+
+#endif // LUCID_HAVE_LLAMA
 
 namespace lucid {
 
@@ -68,6 +97,16 @@ bool EmbeddingStore::initialize(const std::string& model_path) {
 #ifdef LUCID_HAVE_LLAMA
     // Initialize GGML/llama backend
     llama_backend_init();
+    
+    // Check Vulkan availability if GPU mode requested
+    if (m_use_gpu) {
+        bool has_vulkan = vulkan_is_usable();
+        if (has_vulkan) {
+            std::cout << "[INFO] EmbeddingStore: GPU acceleration available via Vulkan" << std::endl;
+        } else {
+            std::cerr << "[WARN] EmbeddingStore: GPU requested but no Vulkan devices found, using CPU" << std::endl;
+        }
+    }
     
     // Load model
     struct llama_model_params params = llama_model_default_params();
