@@ -29,6 +29,7 @@ const char* video_status_to_string(VideoStatus status) {
         case VideoStatus::COMPLETED:   return "completed";
         case VideoStatus::FAILED:      return "failed";
         case VideoStatus::STALE:       return "stale";
+        case VideoStatus::BROKEN:     return "broken";  // Failed too many times
         default:                        return "pending";
     }
 }
@@ -42,6 +43,7 @@ VideoStatus video_status_from_string(const std::string& str) {
     if (str == "completed")   return VideoStatus::COMPLETED;
     if (str == "failed")      return VideoStatus::FAILED;
     if (str == "stale")       return VideoStatus::STALE;
+    if (str == "broken")      return VideoStatus::BROKEN;
     return VideoStatus::PENDING;
 }
 

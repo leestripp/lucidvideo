@@ -27,7 +27,8 @@ enum class VideoStatus {
     VISION_SCANNING,
     COMPLETED,
     FAILED,
-    STALE
+    STALE,
+    BROKEN  // Failed more than 3 times - manual intervention required
 };
 
 const char* video_status_to_string(VideoStatus status);
@@ -66,6 +67,7 @@ struct VideoEntry {
     std::optional<std::string> channel_id;
     VideoStatus status = VideoStatus::PENDING;  // Processing status
     std::string error_message;                  // Set if status == FAILED
+    int retry_count = 0;                       // Number of analysis retry attempts
     std::chrono::system_clock::time_point created_at;
     std::chrono::system_clock::time_point updated_at;
     std::string metadata_json;
@@ -276,6 +278,12 @@ public:
     std::vector<VideoEntry> get_failed_videos();        // Get all failed videos
     void delete_failed_videos();                        // Delete all failed videos
     void reset_completed_to_pending();                  // Reset completed videos for re-analysis
+    
+    // Retry/broken video handling
+    void reset_failed_to_pending(int max_retries = 3);     // Reset failed videos back to pending if retry_count < max_retries
+    void increment_retry_count(const std::string& id);       // Increment retry count when video fails
+    int get_retry_count(const std::string& id);             // Get retry count for a video
+    void mark_video_broken(const std::string& id);          // Mark video as BROKEN (failed too many times)
     
     // Utility
     sqlite3* raw() { return m_db; }

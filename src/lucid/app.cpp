@@ -11,6 +11,8 @@
 #include "model/model_manager.hpp"
 #include "gui/main_window.hpp"
 
+#include <adwaita.h>
+
 #include <glib.h>
 
 #include <sys/stat.h>
@@ -283,6 +285,11 @@ LucidApp::LucidApp()
     : Gtk::Application("org.lucidvideo.LucidVideo", Gio::Application::Flags::NON_UNIQUE) {
     
     LUCID_DEBUG("LucidApp constructing...");
+    
+    // Initialize Adwaita dark mode support - use system preference
+    AdwStyleManager* style_manager = adw_style_manager_get_default();
+    adw_style_manager_set_color_scheme(style_manager, ADW_COLOR_SCHEME_PREFER_DARK);
+    LUCID_DEBUG("[LucidApp] Adwaita dark mode initialized with PREFER_DARK");
     
     // Load CSS styles
     load_css_styles();
