@@ -90,6 +90,78 @@ void AnalysisQueuePanel::create_ui() {
     }), this);
     gtk_box_append(GTK_BOX(actions_bar), m_cancel_btn);
     
+    // Clear All Database button (dangerous - shows confirmation dialog)
+    m_clear_all_btn = gtk_button_new_with_label("Clear All Database");
+    gtk_widget_set_tooltip_text(m_clear_all_btn, "Delete all entries from the database. Videos will remain on disk but all analysis data will be removed.");
+    g_signal_connect_swapped(m_clear_all_btn, "clicked", G_CALLBACK(+[](AnalysisQueuePanel* self) {
+        // First check if analysis is in progress
+        if (self->m_is_processing) {
+            // Show error message - can't clear while processing
+            GtkWidget* error_dialog = gtk_message_dialog_new(
+                nullptr,  // No parent window for this simple warning
+                GTK_DIALOG_DESTROY_WITH_PARENT,
+                GTK_MESSAGE_WARNING,
+                GTK_BUTTONS_OK,
+                "Cannot Clear Database"
+            );
+            g_signal_connect_swapped(error_dialog, "response", G_CALLBACK(+[](GtkWidget* dialog) {
+                gtk_window_destroy(GTK_WINDOW(dialog));
+            }), error_dialog);
+            gtk_widget_set_visible(error_dialog, TRUE);
+            return;
+        }
+        
+        // Build message using markup for formatting
+        std::string message = 
+            "<b>Clear All Database?</b>\n\n"
+            "This will DELETE ALL ENTRIES from the database!\n\n"
+            "• All videos will be removed from the library\n"
+            "• All markers (AUDIO, VISION) will be deleted\n"
+            "• All thumbnails will be deleted\n"
+            "• All embeddings will be deleted\n\n"
+            "Your actual video files will NOT be deleted from disk.";
+        
+        GtkWidget* dialog = gtk_message_dialog_new(
+            nullptr,  // No parent window for this simple dialog
+            GTK_DIALOG_DESTROY_WITH_PARENT,
+            GTK_MESSAGE_WARNING,
+            GTK_BUTTONS_CANCEL,
+            "Clear All Database?"
+        );
+        
+        // Set the message using secondary markup
+        gtk_message_dialog_format_secondary_markup(GTK_MESSAGE_DIALOG(dialog), "%s", message.c_str());
+        
+        // Add the Delete All button with destructive styling
+        GtkWidget* delete_btn = gtk_button_new_with_label("Delete All");
+        gtk_widget_add_css_class(delete_btn, "destructive-action");
+        
+        // Add response handler for the Delete All button
+        g_signal_connect(delete_btn, "clicked", G_CALLBACK(+[](GtkWidget* dialog) {
+            // Close the dialog first
+            gtk_window_destroy(GTK_WINDOW(dialog));
+            
+            // Get self from user data (we'll need to restructure for this)
+        }), dialog);
+        
+        // Add button to dialog
+        gtk_dialog_add_action_widget(GTK_DIALOG(dialog), delete_btn, GTK_RESPONSE_REJECT);
+        
+        // Set response handler for the dialog
+        g_signal_connect(dialog, "response", G_CALLBACK(+[](GtkWidget* dialog, int response_id, AnalysisQueuePanel* self) {
+            gtk_window_destroy(GTK_WINDOW(dialog));
+            if (response_id == GTK_RESPONSE_REJECT) {
+                // User confirmed - call the clear all callback
+                if (self->m_clear_all_callback) {
+                    self->m_clear_all_callback();
+                }
+            }
+        }), self);
+        
+        gtk_widget_set_visible(dialog, TRUE);
+    }), this);
+    gtk_box_append(GTK_BOX(actions_bar), m_clear_all_btn);
+    
     // Spacer
     GtkWidget* action_spacer = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
     gtk_widget_set_hexpand(action_spacer, TRUE);

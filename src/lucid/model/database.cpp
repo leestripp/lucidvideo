@@ -1723,6 +1723,69 @@ void Database::delete_failed_videos() {
     }
 }
 
+void Database::delete_all_videos() {
+    // Delete all associated data from all tables in correct order (respecting foreign keys)
+    char* err_msg = nullptr;
+    
+    // 1. Clear all vision analyses
+    sqlite3_exec(m_db, "DELETE FROM vision_analyses", nullptr, nullptr, &err_msg);
+    if (err_msg) {
+        std::cerr << "Failed to delete vision analyses: " << err_msg << std::endl;
+        sqlite3_free(err_msg);
+        err_msg = nullptr;
+    }
+    
+    // 2. Clear all transcriptions
+    sqlite3_exec(m_db, "DELETE FROM transcriptions", nullptr, nullptr, &err_msg);
+    if (err_msg) {
+        std::cerr << "Failed to delete transcriptions: " << err_msg << std::endl;
+        sqlite3_free(err_msg);
+        err_msg = nullptr;
+    }
+    
+    // 3. Clear all markers
+    sqlite3_exec(m_db, "DELETE FROM markers", nullptr, nullptr, &err_msg);
+    if (err_msg) {
+        std::cerr << "Failed to delete markers: " << err_msg << std::endl;
+        sqlite3_free(err_msg);
+        err_msg = nullptr;
+    }
+    
+    // 4. Clear all thumbnails
+    sqlite3_exec(m_db, "DELETE FROM thumbnails", nullptr, nullptr, &err_msg);
+    if (err_msg) {
+        std::cerr << "Failed to delete thumbnails: " << err_msg << std::endl;
+        sqlite3_free(err_msg);
+        err_msg = nullptr;
+    }
+    
+    // 5. Clear all embeddings
+    sqlite3_exec(m_db, "DELETE FROM embeddings", nullptr, nullptr, &err_msg);
+    if (err_msg) {
+        std::cerr << "Failed to delete embeddings: " << err_msg << std::endl;
+        sqlite3_free(err_msg);
+        err_msg = nullptr;
+    }
+    
+    // 6. Clear all timeline entries
+    sqlite3_exec(m_db, "DELETE FROM timeline", nullptr, nullptr, &err_msg);
+    if (err_msg) {
+        std::cerr << "Failed to delete timeline entries: " << err_msg << std::endl;
+        sqlite3_free(err_msg);
+        err_msg = nullptr;
+    }
+    
+    // 7. Delete all videos
+    sqlite3_exec(m_db, "DELETE FROM videos", nullptr, nullptr, &err_msg);
+    if (err_msg) {
+        std::cerr << "Failed to delete videos: " << err_msg << std::endl;
+        sqlite3_free(err_msg);
+        err_msg = nullptr;
+    }
+    
+    LUCID_INFO("Database::delete_all_videos: All video entries and associated data deleted");
+}
+
 void Database::reset_completed_to_pending() {
     // Reset completed videos to pending and clear their analysis data
     const char* clear_data = R"(

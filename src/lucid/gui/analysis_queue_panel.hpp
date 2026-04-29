@@ -221,6 +221,10 @@ private:
     // Action buttons
     GtkWidget* m_cancel_btn = nullptr;
     GtkWidget* m_reanalyze_all_btn = nullptr;
+    GtkWidget* m_clear_all_btn = nullptr;
+    
+    // Confirmation dialog
+    GtkWidget* m_confirm_dialog = nullptr;
     
     // Current job info
     std::string m_current_video_id;

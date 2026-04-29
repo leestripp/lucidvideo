@@ -274,6 +274,7 @@ public:
     void clear_all_markers();                           // Clear all markers from all videos
     void clear_all_thumbnails();                        // Clear all thumbnails
     void clear_all_embeddings();                        // Clear all embeddings
+    void delete_all_videos();                          // Delete ALL videos and all associated data
     void reset_all_to_pending();                        // Reset all videos to pending
     std::vector<VideoEntry> get_failed_videos();        // Get all failed videos
     void delete_failed_videos();                        // Delete all failed videos

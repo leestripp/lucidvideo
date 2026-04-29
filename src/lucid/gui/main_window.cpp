@@ -23,6 +23,7 @@
 #include <gtk/gtk.h>
 
 #include <thread>
+#include <chrono>
 #include <filesystem>
 #include <algorithm>
 #include <cstring>
@@ -1600,24 +1601,38 @@ void MainWindow::register_analysis_callbacks(Glib::RefPtr<LucidApp> app) {
         
         // Set clear all data callback
         m_analysis_queue_panel->set_clear_all_callback([this, app]() {
-            LUCID_DEBUG("Clearing all analysis data...");
+            LUCID_DEBUG("Deleting all database entries...");
             
             // Check if analysis is currently in progress
             auto worker = app->get_analysis_worker();
             if (worker && worker->is_processing()) {
-                LUCID_WARN("Cannot clear data while analysis is in progress");
-                return;
+                LUCID_INFO("Analysis in progress - requesting cancel and waiting for stop...");
+                
+                // Request cancel first
+                worker->request_cancel();
+                
+                // Wait for processing to stop (with timeout)
+                int wait_count = 0;
+                const int max_wait = 30;  // Max 30 seconds wait
+                while (worker->is_processing() && wait_count < max_wait) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                    wait_count++;
+                }
+                
+                if (worker->is_processing()) {
+                    LUCID_WARN("Could not stop analysis in time - proceeding anyway may cause crash");
+                    // Force stop by setting stop flag
+                    worker->stop();
+                    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                }
+                
+                LUCID_INFO("Analysis stopped, proceeding with database clear");
             }
             
             if (m_db) {
-                // Clear all markers, thumbnails, embeddings but keep videos
-                m_db->clear_all_markers();
-                m_db->clear_all_thumbnails();
-                m_db->clear_all_embeddings();
-                
-                // Reset all videos to pending
-                m_db->reset_all_videos_to_pending();
-                LUCID_INFO("All analysis data cleared, all videos reset to pending");
+                // Delete ALL videos and all associated data
+                m_db->delete_all_videos();
+                LUCID_INFO("All database entries deleted - videos removed from library");
             }
             
             // Refresh the queue panel
@@ -1625,8 +1640,8 @@ void MainWindow::register_analysis_callbacks(Glib::RefPtr<LucidApp> app) {
                 m_analysis_queue_panel->refresh();
                 if (m_db) {
                     QueueStats stats;
-                    stats.total_videos = m_db->get_total_video_count();
-                    stats.pending = stats.total_videos;  // All are now pending
+                    stats.total_videos = 0;
+                    stats.pending = 0;
                     stats.completed = 0;
                     stats.failed = 0;
                     stats.total_markers = 0;
