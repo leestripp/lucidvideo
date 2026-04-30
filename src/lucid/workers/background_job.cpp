@@ -12,8 +12,9 @@ namespace lucid {
 // Private implementation
 class BackgroundJobManager::Impl {
 public:
-    ThreadPool io_pool{2, 0};   // 2 I/O threads
-    ThreadPool compute_pool{0, 2};  // 2 compute threads
+    // Thread pools with adaptive sizing (0 = auto-detect based on hardware)
+    ThreadPool io_pool{0, 0};       // Adaptive I/O threads
+    ThreadPool compute_pool{0, 0};  // Adaptive compute threads
     
     std::vector<BackgroundJob> jobs;
     std::mutex jobs_mutex;

@@ -6,6 +6,10 @@
 
 #include "transcription_engine.hpp"
 #include "model_manager.hpp"
+#include "../utils/hardware.hpp"
+#include "../settings/app_settings.hpp"
+#include "../logging.hpp"
+#include <filesystem>
 
 #include <glibmm.h>
 #include <iostream>
@@ -202,8 +206,29 @@ bool TranscriptionEngine::initialize(const std::string& model_path) {
     }
     
 #ifdef LUCID_HAVE_WHISPER
-    // Initialize whisper context using recommended API
+    // Initialize whisper context with GPU support
     struct whisper_context_params params = whisper_context_default_params();
+    
+    // Check GPU availability and configure
+    hardware::GPUInfo hw = hardware::detect_gpu();
+    bool use_gpu = AppSettings::instance().get_use_gpu() && hw.available && hw.supports_vulkan;
+    
+    if (use_gpu) {
+        params.use_gpu = true;
+        params.gpu_device = 0;  // Use first GPU
+        // Auto-calculate GPU layers based on model size
+        int64_t model_size = std::filesystem::file_size(model_path);
+        int auto_layers = hardware::get_optimal_gpu_layers(model_size, hw);
+        // Note: whisper doesn't have n_gpu_layers in context params, it uses use_gpu flag
+        LUCID_INFO("[Transcription] GPU mode enabled: %s, ~%d layers estimated", 
+                   hw.name.c_str(), auto_layers);
+    } else {
+        params.use_gpu = false;
+        // Use optimal thread count for CPU
+        m_n_threads = hardware::get_optimal_compute_threads();
+        LUCID_INFO("[Transcription] CPU mode enabled: %d threads", m_n_threads);
+    }
+    
     m_ctx = whisper_init_from_file_with_params(model_path.c_str(), params);
     if (!m_ctx) {
         std::cerr << "[ERROR] Failed to initialize whisper context" << std::endl;

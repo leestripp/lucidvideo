@@ -176,6 +176,11 @@ void AppSettings::load() {
         
         m_use_gpu = find_bool("use_gpu", true);
         m_max_parallel_jobs = find_int("max_parallel_jobs", 4);
+        
+        // GPU layers (0 = auto-calculate)
+        m_whisper_gpu_layers = find_int("whisper_gpu_layers", 0);
+        m_llama_gpu_layers = find_int("llama_gpu_layers", 0);
+        
         m_embedding_context_size = find_int("embedding_context_size", 2048);
         m_whisper_context_size = find_int("whisper_context_size", 16384);
         m_thumbnail_size = static_cast<ThumbnailSize>(find_int("thumbnail_size", 1));
@@ -253,6 +258,10 @@ void AppSettings::save() {
         // Performance
         file << "  \"use_gpu\": " << (m_use_gpu ? "true" : "false") << ",\n";
         file << "  \"max_parallel_jobs\": " << m_max_parallel_jobs << ",\n";
+        
+        // GPU layers (0 = auto)
+        file << "  \"whisper_gpu_layers\": " << m_whisper_gpu_layers << ",\n";
+        file << "  \"llama_gpu_layers\": " << m_llama_gpu_layers << ",\n";
         
         // Context sizes
         file << "  \"embedding_context_size\": " << m_embedding_context_size << ",\n";
@@ -398,6 +407,26 @@ void AppSettings::set_max_parallel_jobs(int jobs) {
     std::lock_guard<std::mutex> lock(m_mutex);
     if (m_max_parallel_jobs != jobs) {
         m_max_parallel_jobs = std::max(1, std::min(16, jobs));
+        save();
+        emit_signal(SignalType::GPU_CHANGED);
+        emit_signal(SignalType::ANY_CHANGED);
+    }
+}
+
+void AppSettings::set_whisper_gpu_layers(int layers) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    if (m_whisper_gpu_layers != layers) {
+        m_whisper_gpu_layers = std::max(0, std::min(32, layers));
+        save();
+        emit_signal(SignalType::GPU_CHANGED);
+        emit_signal(SignalType::ANY_CHANGED);
+    }
+}
+
+void AppSettings::set_llama_gpu_layers(int layers) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    if (m_llama_gpu_layers != layers) {
+        m_llama_gpu_layers = std::max(0, std::min(64, layers));
         save();
         emit_signal(SignalType::GPU_CHANGED);
         emit_signal(SignalType::ANY_CHANGED);

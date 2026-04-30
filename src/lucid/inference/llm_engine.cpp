@@ -4,10 +4,13 @@
 
 #include "llm_engine.hpp"
 #include "../logging.hpp"
+#include "../utils/hardware.hpp"
+#include "../settings/app_settings.hpp"
 
 #include <cstring>
 #include <iostream>
 #include <sstream>
+#include <filesystem>
 
 // Llama C API
 extern "C" {
@@ -73,12 +76,32 @@ bool LLMEngine::initialize(const std::string& model_path, const LLMConfig& confi
     
     LUCID_INFO("[LLMEngine] Initializing with model: %s", model_path.c_str());
     
-    // Initialize llama backend
+    // Initialize llama backend with GPU support
     llama_backend_init();
     
-    // Load model
+    // Check GPU availability
+    auto gpu = hardware::detect_gpu();
+    bool use_gpu = AppSettings::instance().get_use_gpu() && gpu.available && gpu.supports_vulkan;
+    
+    // Load model with GPU offloading
     struct llama_model_params params = llama_model_default_params();
-    params.n_gpu_layers = m_config.gpu_layers;
+    
+    if (use_gpu) {
+        // Use user setting or auto-calculate
+        int gpu_layers = AppSettings::instance().get_llama_gpu_layers();
+        if (gpu_layers == 0) {
+            int64_t model_size = std::filesystem::file_size(model_path);
+            gpu_layers = hardware::get_optimal_gpu_layers(model_size, gpu);
+        }
+        params.n_gpu_layers = gpu_layers;
+        LUCID_INFO("[LLMEngine] GPU mode enabled: %s, %d layers, %ld MB VRAM",
+                   gpu.name.c_str(), gpu_layers, gpu.vram_bytes / (1024*1024));
+    } else {
+        params.n_gpu_layers = 0;
+        // Use optimal thread count for CPU
+        m_config.threads = hardware::get_optimal_compute_threads();
+        LUCID_INFO("[LLMEngine] CPU mode enabled: %d threads", m_config.threads);
+    }
     
     m_model = llama_model_load_from_file(model_path.c_str(), params);
     if (!m_model) {

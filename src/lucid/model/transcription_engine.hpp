@@ -69,6 +69,14 @@ public:
     bool get_use_gpu() const { return m_use_gpu; }
     void set_use_gpu(bool use) { m_use_gpu = use; }
     
+    // Get/set GPU layers for whisper
+    int get_gpu_layers() const { return m_gpu_layers; }
+    void set_gpu_layers(int layers) { m_gpu_layers = layers; }
+    
+    // Get/set GPU layers for whisper
+    int get_whisper_gpu_layers() const { return m_gpu_layers; }
+    void set_whisper_gpu_layers(int layers) { m_gpu_layers = layers; }
+    
     // Language detection
     std::string detect_language(const std::string& audio_path);
     
@@ -81,6 +89,7 @@ private:
     int m_n_threads = 4;
     int m_context_size = 16384;  // whisper audio context size
     bool m_use_gpu = false;       // GPU acceleration
+    int m_gpu_layers = 0;        // GPU layers for whisper (0 = auto)
     std::string m_language = "auto";
     std::string m_model_path;
     

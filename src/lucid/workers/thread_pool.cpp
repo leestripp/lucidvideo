@@ -1,6 +1,7 @@
 // thread_pool.cpp - Dual-queue worker thread pool implementation
 #include "thread_pool.hpp"
 #include "../logging.hpp"
+#include "../utils/hardware.hpp"
 
 namespace lucid {
 
@@ -8,7 +9,19 @@ ThreadPool::ThreadPool(int n_io_threads, int n_compute_threads)
     : m_n_io_threads(n_io_threads)
     , m_n_compute_threads(n_compute_threads) {
     
-    LUCID_INFO("Creating ThreadPool: %d I/O threads, %d compute threads", 
+    // If default values (0), use hardware-optimized counts
+    if (m_n_io_threads <= 0) {
+        m_n_io_threads = hardware::get_optimal_io_threads();
+    }
+    if (m_n_compute_threads <= 0) {
+        m_n_compute_threads = hardware::get_optimal_compute_threads();
+    }
+    
+    // Clamp to reasonable limits
+    m_n_io_threads = std::max(1, std::min(8, m_n_io_threads));
+    m_n_compute_threads = std::max(1, std::min(16, m_n_compute_threads));
+    
+    LUCID_INFO("Creating ThreadPool: %d I/O threads, %d compute threads (adaptive)", 
                n_io_threads, n_compute_threads);
     
     // Create I/O workers

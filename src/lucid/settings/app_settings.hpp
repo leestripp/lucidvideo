@@ -65,6 +65,13 @@ public:
     void set_use_gpu(bool enabled);
     void set_max_parallel_jobs(int jobs);
     
+    // ===== GPU Layer Settings =====
+    int get_whisper_gpu_layers() const { return m_whisper_gpu_layers; }
+    void set_whisper_gpu_layers(int layers);
+    
+    int get_llama_gpu_layers() const { return m_llama_gpu_layers; }
+    void set_llama_gpu_layers(int layers);
+    
     // ===== Context Sizes =====
     int get_embedding_context_size() const { return m_embedding_context_size; }
     int get_whisper_context_size() const { return m_whisper_context_size; }
@@ -128,6 +135,10 @@ private:
     // Performance
     bool m_use_gpu = true;
     int m_max_parallel_jobs = 4;
+    
+    // GPU layers (0 = auto-calculate based on VRAM)
+    int m_whisper_gpu_layers = 0;
+    int m_llama_gpu_layers = 0;
     
     // Context sizes
     int m_embedding_context_size = 2048;

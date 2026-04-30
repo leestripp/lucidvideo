@@ -1,234 +1,249 @@
-# LucidVideo - Video Integrity Checker Implementation Plan
+# LucidVideo Performance Optimization Plan
 
 ## System Information
 | Component | Value |
 |-----------|-------|
-| Kernel | Linux 6.8.0 |
-| OS | Arch Linux |
+| Kernel | Linux 6.18.22 |
+| OS | Arch Linux (x86_64) |
+| Container | Podman (docker.io/library/archlinux:latest) |
+| Display | Wayland, GNOME |
 | Architecture | x86_64 |
 
-## Project Overview
-- **Build System**: CMake with C++20
-- **Database**: SQLite3 with sqlite-vec
-- **UI Framework**: GTK4/libadwaita
+## Project Info
+- **Language**: C++20
+- **Build System**: CMake
+- **Executable**: `lucidvideo` (renamed from `lucid` in v0.4.1)
+- **Key Dependencies**: whisper.cpp, llama.cpp, ggml, GTK4, FFmpeg, SQLite
 
-## Problem Statement
-Videos that fail during analysis (due to transient errors, corrupted files, etc.) are left in FAILED state and never retried. We need a background checker that:
-1. Periodically scans for failed videos
-2. Re-queues them for retry (up to 3 attempts)
-3. Marks them as BROKEN after 3 failures
+## Performance Analysis Summary
 
----
+### Current Architecture
+| Component | Thread Pool | GPU Support | Issues |
+|-----------|-------------|-------------|---------|
+| ThreadPool | Dual-queue (2 I/O, 2 compute) | N/A | Fixed thread count |
+| Whisper | 4 threads | Disabled | No GPU offload |
+| Llama.cpp | Config threads | Partial (gpu_layers) | Suboptimal defaults |
+| Embeddings | 4 threads | Uses `use_gpu` flag | Not implemented |
+| Vision (Qwen2-VL) | Batch of 4 | Via llama.cpp | No parallel batching |
 
-## Implementation Plan
+### Key Findings
 
-### Phase 1: Database Schema Updates
+1. **GPU Acceleration Disabled/Incomplete**
+   - `m_use_gpu = false` hardcoded in transcription_engine.hpp
+   - Whisper not using Vulkan backend
+   - GGML_VULKAN enabled in CMake but not utilized at runtime
 
-#### 1.1 Add BROKEN status to VideoStatus enum
-**File**: `src/lucid/model/database.hpp`
-```cpp
-enum class VideoStatus {
-    PENDING,
-    ANALYZING,
-    TRANSCRIBING,
-    THUMBNAILING,
-    VISION_SCANNING,
-    COMPLETED,
-    FAILED,
-    STALE,
-    BROKEN  // NEW: Failed more than 3 times
-};
-```
+2. **Thread Configuration Not Adaptive**
+   - Hardcoded `m_n_threads = 4` for Whisper
+   - Llama config uses defaults, not system-optimal
+   - Thread pool sizes are fixed (2 I/O, 2 compute)
 
-**File**: `src/lucid/model/database.cpp`
-- Update `video_status_to_string()` to return "broken"
-- Update `video_status_from_string()` to parse "broken"
+3. **Batch Processing Inefficient**
+   - Vision scanner processes batch of 4 sequentially
+   - No parallel video analysis
+   - Sequential transcription for all videos
 
-#### 1.2 Add retry_count column to videos table
-**File**: `src/lucid/model/database.cpp`
-Add migration in `initialize_schema()`:
-```cpp
-// Migration: Add retry_count column to videos
-const char* migrate_retry = R"(
-    ALTER TABLE videos ADD COLUMN retry_count INTEGER DEFAULT 0;
-)";
-sqlite3_exec(m_db, migrate_retry, nullptr, nullptr, nullptr);
-```
+4. **No CPU Affinity/NUMA Awareness**
+   - No thread pinning
+   - No NUMA optimization
+   - `march=native` but no further SIMD optimizations
 
-#### 1.3 Update VideoEntry struct
-**File**: `src/lucid/model/database.hpp`
-```cpp
-struct VideoEntry {
-    // ... existing fields ...
-    std::string error_message;
-    int retry_count = 0;  // NEW: Number of analysis retry attempts
-    // ... rest of fields ...
-};
-```
-
-#### 1.4 Add new database methods
-**File**: `src/lucid/model/database.hpp`
-```cpp
-// Retry/broken video handling
-void reset_failed_to_pending(int max_retries = 3);
-void increment_retry_count(const std::string& id);
-int get_retry_count(const std::string& id);
-void mark_video_broken(const std::string& id);
-```
+5. **Missing Optimizations**
+   - No KV cache optimization
+   - No model quantization guidance
+   - No async pipeline for analysis
 
 ---
 
-### Phase 2: VideoIntegrityChecker Class
+## Tasks
 
-#### 2.1 Create header file
-**File**: `src/lucid/model/video_integrity_checker.hpp`
+### Task 1: GPU Acceleration for Whisper
+**Priority**: HIGH
 
+Enable Vulkan GPU acceleration for whisper.cpp:
+- Set `params.use_vulkan = true` in transcription initialization
+- Add GPU layer configuration to whisper parameters
+- Create GPU detection utility
+
+### Task 2: GPU Acceleration for Llama.cpp
+**Priority**: HIGH
+
+Optimize llama.cpp GPU offloading:
+- Set optimal `gpu_layers` based on VRAM
+- Configure backend init with Vulkan support
+- Add GPU layer auto-detection
+
+### Task 3: Adaptive Thread Pool Configuration
+**Priority**: HIGH
+
+Make thread pool CPU-aware:
+- Detect physical cores at runtime
+- Implement CPU affinity for compute threads
+- Add thread scaling based on workload
+
+### Task 4: Parallel Video Analysis Pipeline
+**Priority**: MEDIUM
+
+Enable concurrent video processing:
+- Parallel thumbnail generation
+- Pipeline transcription + vision analysis
+- Concurrent video imports
+
+### Task 5: Vision Scanner Optimization
+**Priority**: MEDIUM
+
+Improve vision analysis throughput:
+- Increase batch size dynamically
+- Add parallel batch processing
+- Pre-warm vision model
+
+### Task 6: SIMD and CPU Optimization
+**Priority**: MEDIUM
+
+Additional CPU optimizations:
+- Enable explicit SIMD flags beyond march=native
+- Add OpenMP for parallel loops
+- Optimize memory allocations
+
+### Task 7: Settings UI for Performance
+**Priority**: LOW
+
+Add user-configurable performance settings:
+- GPU toggle with auto-detect
+- Thread count configuration
+- Batch size settings
+
+---
+
+## Todo List
+
+### Phase 1: GPU Acceleration (High Priority) ✅ COMPLETED
+
+- [x] **1.1** Add GPU detection utility in `src/lucid/utils/hardware.cpp`
+  - Detect Vulkan device
+  - Query VRAM and Compute capability
+  - Return GPU availability and specs
+
+- [x] **1.2** Update `transcription_engine.cpp` to enable GPU
+  - Set `params.use_gpu = true` when GPU enabled
+  - Auto-calculate optimal thread count for CPU
+  - Log GPU/CPU mode at initialization
+
+- [x] **1.3** Update `llm_engine.cpp` GPU offloading
+  - Auto-calculate optimal `gpu_layers` based on VRAM
+  - Set GPU or CPU mode with optimal configuration
+  - Add Vulkan device detection
+
+- [x] **1.4** Update `app_settings.hpp/cpp` for GPU settings
+  - Add `whisper_gpu_layers` setting (0 = auto)
+  - Add `llama_gpu_layers` setting (0 = auto)
+  - Add load/save methods for new settings
+
+### Phase 2: Thread Pool Optimization (High Priority)
+
+- [ ] **2.1** Create hardware detection module
+  - Get CPU core count (physical vs logical)
+  - Get available memory
+  - Detect NUMA configuration
+
+- [ ] **2.2** Update `ThreadPool` to use adaptive sizing
+  - Calculate I/O threads based on storage type
+  - Calculate compute threads based on CPU cores
+  - Add affinity hints for compute threads
+
+- [ ] **2.3** Add thread affinity for Whisper/Llama
+  - Pin inference threads to specific cores
+  - Reduce context switching during inference
+
+### Phase 3: Parallel Processing (Medium Priority)
+
+- [ ] **3.1** Update `BackgroundJobManager` for parallel video analysis
+  - Increase `m_max_parallel_jobs` default
+  - Allow concurrent video imports
+  - Pipeline transcription with thumbnail generation
+
+- [ ] **3.2** Optimize `VisionScanner` batch processing
+  - Increase default batch size to 8-16
+  - Add parallel batch queues
+  - Pre-warm model on startup
+
+- [ ] **3.3** Add async database operations
+  - Move DB writes to background thread
+  - Implement write batching
+  - Cache frequently accessed data
+
+### Phase 4: SIMD and Memory Optimization (Medium Priority)
+
+- [ ] **4.1** Add OpenMP support to CMakeLists.txt
+  ```cmake
+  find_package(OpenMP)
+  if(OpenMP_CXX_FOUND)
+      target_link_libraries(lucid_core PRIVATE OpenMP::OpenMP_CXX)
+  endif()
+  ```
+
+- [ ] **4.2** Add explicit SIMD flags
+  ```cmake
+  # Beyond -march=native, add explicit SIMD
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ffast-math")
+  ```
+
+- [ ] **4.3** Optimize memory allocations
+  - Add memory pool for video frames
+  - Reuse thumbnail buffers
+  - Implement circular buffer for streaming
+
+### Phase 5: Settings UI (Low Priority)
+
+- [ ] **5.1** Add Performance tab to settings page
+  - GPU enable/disable
+  - Thread count sliders
+  - Batch size configuration
+
+- [ ] **5.2** Add performance monitoring
+  - Show CPU/GPU utilization
+  - Queue depth display
+  - Memory usage
+
+---
+
+## Implementation Notes
+
+### Whisper GPU Configuration
 ```cpp
-#pragma once
-
-#include <thread>
-#include <atomic>
-#include <chrono>
-#include <functional>
-#include <mutex>
-#include <condition_variable>
-
-namespace lucid {
-
-class Database;
-
-class VideoIntegrityChecker {
-public:
-    using BrokenVideoCallback = std::function<void(const std::string& video_id, const std::string& error)>;
-    
-    VideoIntegrityChecker(Database& db, int check_interval_sec = 10);
-    ~VideoIntegrityChecker();
-    
-    void start();
-    void stop();
-    
-    void set_broken_video_callback(BrokenVideoCallback cb);
-    
-    int get_check_interval() const { return m_check_interval_sec; }
-    void set_check_interval(int seconds) { m_check_interval_sec = seconds; }
-    
-    bool is_running() const { return m_running.load(); }
-
-private:
-    void worker_loop();
-    void check_and_retry_failed_videos();
-
-    Database& m_db;
-    int m_check_interval_sec;
-    
-    std::atomic<bool> m_running{false};
-    std::atomic<bool> m_stop_requested{false};
-    std::thread m_worker_thread;
-    
-    std::mutex m_callback_mutex;
-    BrokenVideoCallback m_broken_callback;
-};
-
-} // namespace lucid
+struct whisper_full_params params = whisper_full_default_params(WHISPER_SAMPLING_GREEDY);
+params.use_vulkan = AppSettings::instance().get_use_gpu();
+params.n_gpu_layers = AppSettings::instance().get_whisper_gpu_layers();
+params.n_threads = AppSettings::instance().get_whisper_threads();
 ```
 
-#### 2.2 Create implementation file
-**File**: `src/lucid/model/video_integrity_checker.cpp`
-
-Key logic:
+### Llama GPU Configuration
 ```cpp
-void VideoIntegrityChecker::check_and_retry_failed_videos() {
-    auto failed_videos = m_db.get_failed_videos();
-    
-    for (const auto& video : failed_videos) {
-        int retry_count = m_db.get_retry_count(video.id);
-        
-        if (retry_count < 3) {
-            // Increment retry count and reset to pending
-            m_db.increment_retry_count(video.id);
-            m_db.update_video_status(video.id, VideoStatus::PENDING);
-            LUCID_INFO("VideoIntegrityChecker: Re-queuing %s (attempt %d/3)", 
-                       video.title.c_str(), retry_count + 1);
-        } else {
-            // Mark as broken
-            m_db.mark_video_broken(video.id);
-            LUCID_WARN("VideoIntegrityChecker: Marking %s as BROKEN after 3 failed attempts", 
-                       video.title.c_str());
-            
-            if (m_broken_callback) {
-                m_broken_callback(video.id, video.error_message);
-            }
-        }
-    }
+// Auto-calculate layers based on VRAM
+int get_optimal_gpu_layers(int64_t vram_bytes, int model_size_bytes) {
+    int64_t available = vram_bytes * 80 / 100;  // 80% safety margin
+    int layers = available / (model_size_bytes / 32);  // ~32MB per layer
+    return std::min(layers, 32);  // Cap at 32 layers for typical models
+}
+
+struct llama_model_params params = llama_model_default_params();
+params.n_gpu_layers = get_optimal_gpu_layers(vram, model_size);
+```
+
+### Thread Pool Adaptive Sizing
+```cpp
+int get_optimal_compute_threads() {
+    int cores = std::thread::hardware_concurrency();
+    int physical = cores / 2;  // Account for SMT
+    // Leave 1-2 cores for UI and I/O
+    return std::max(1, physical - 2);
 }
 ```
 
 ---
 
-### Phase 3: Integration
+## References
 
-#### 3.1 Wire up in App
-**File**: `src/lucid/app.cpp`
-
-```cpp
-// In App constructor or initialization
-m_integrity_checker = std::make_unique<VideoIntegrityChecker>(*m_database, 10);
-m_integrity_checker->set_broken_video_callback([this](const std::string& id, const std::string& err) {
-    // Notify UI about broken video
-    notify_broken_video(id, err);
-});
-m_integrity_checker->start();
-
-// In shutdown
-m_integrity_checker->stop();
-```
-
-#### 3.2 Add to CMakeLists.txt
-**File**: `CMakeLists.txt`
-```cmake
-file(GLOB LUCID_SOURCES
-    "src/*.cpp"
-    "src/**/*.cpp"
-    # Don't double-add video_integrity_checker.cpp
-)
-# Alternative: Add explicitly
-set(LUCID_SOURCES
-    ${LUCID_SOURCES}
-    "src/lucid/model/video_integrity_checker.cpp"
-)
-```
-
----
-
-### Phase 4: Testing
-
-1. Create a test video that fails (simulate error)
-2. Verify it goes from FAILED → PENDING → FAILED → PENDING → FAILED → BROKEN
-3. Check logs show the retry attempts
-4. Verify BROKEN videos don't get re-queued
-
----
-
-## File Changes Summary
-
-| File | Change Type |
-|------|-------------|
-| `src/lucid/model/database.hpp` | Add BROKEN status, retry_count field, new method signatures |
-| `src/lucid/model/database.cpp` | Implement BROKEN status, migrations, new methods |
-| `src/lucid/model/video_integrity_checker.hpp` | NEW - Header file |
-| `src/lucid/model/video_integrity_checker.cpp` | NEW - Implementation |
-| `src/lucid/app.cpp` | Integrate checker |
-| `src/lucid/app.hpp` | Add member variable |
-| `CMakeLists.txt` | Add new source file |
-
----
-
-## Implementation Order
-
-1. ✅ DONE - Update `database.hpp` - Add BROKEN status, retry_count field, method signatures
-2. ✅ DONE - Update `database.cpp` - Implement status handling, migrations, methods
-3. Create `video_integrity_checker.hpp` - Class header
-4. Create `video_integrity_checker.cpp` - Class implementation
-5. Update `app.cpp` / `app.hpp` - Wire up integration
-6. Update `CMakeLists.txt` - Add source file
-7. Build and test
+- [Whisper.cpp GPU Acceleration](https://github.com/ggml-org/whisper.cpp/discussions/2662)
+- [Llama.cpp Performance Tuning](https://www.mintlify.com/ggml-org/llama.cpp/advanced/performance-tuning)
+- [GPU VRAM and llama.cpp](https://sergiiob.dev/posts/gpu-vram-cpu-offload-llama-cpp-deep-dive/)
