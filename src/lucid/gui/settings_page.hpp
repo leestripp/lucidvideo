@@ -8,6 +8,7 @@
 
 // Use ThumbnailSize from AppSettings (single source of truth)
 #include "../settings/app_settings.hpp"
+#include "../utils/hardware.hpp"
 
 namespace lucid {
 
@@ -71,8 +72,8 @@ public:
     // Get current tab name
     std::string get_active_tab_name() const {
         int page = get_active_tab();
-        if (page < 0 || page > 3) return "unknown";
-        const char* tab_names[] = {"general", "folders", "models", "advanced"};
+        if (page < 0 || page > 2) return "unknown";
+        const char* tab_names[] = {"general", "folders", "performance"};
         return tab_names[page];
     }
     
@@ -87,7 +88,7 @@ private:
     void setup_general_page();
     void setup_folders_page();
     void setup_models_page();
-    void setup_advanced_page();
+    void setup_performance_page();
     
     void add_folder_row(const std::string& path);
     void remove_folder_row(const std::string& path);
@@ -95,6 +96,7 @@ private:
     static void on_add_folder_clicked(GtkButton* button, gpointer data);
     static void on_remove_folder_clicked(GtkButton* button, gpointer data);
     static void on_gpu_toggled(GtkSwitch* switch_widget, gpointer data);
+    static void on_perf_gpu_toggled(GtkSwitch* switch_widget, gpointer data);
     static void on_parallel_jobs_changed(GtkSpinButton* button, gpointer data);
     static void on_embedding_context_changed(GtkSpinButton* button, gpointer data);
     static void on_whisper_context_changed(GtkSpinButton* button, gpointer data);
@@ -133,6 +135,14 @@ private:
     GtkWidget* m_vision_interval_spin = nullptr;
     GtkWidget* m_vision_max_spin = nullptr;
     GtkWidget* m_vision_extract_combo = nullptr;
+    
+    // Performance page widgets (for monitoring)
+    GtkWidget* m_perf_cpu_label = nullptr;
+    GtkWidget* m_perf_gpu_label = nullptr;
+    GtkWidget* m_perf_memory_label = nullptr;
+    GtkWidget* m_perf_queue_label = nullptr;
+    GtkWidget* m_perf_gpu_switch = nullptr;
+    GtkWidget* m_perf_thread_count_label = nullptr;
     
     // Callbacks
     void (*m_folder_added_callback)(const std::string&) = nullptr;

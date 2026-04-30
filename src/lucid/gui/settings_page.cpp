@@ -39,6 +39,8 @@ void SettingsPage::initialize(GtkWidget* /*parent*/) {
     setup_general_page();
     LUCID_INFO("[SettingsPage] initialize() - Setting up folders page");
     setup_folders_page();
+    LUCID_INFO("[SettingsPage] initialize() - Setting up performance page");
+    setup_performance_page();
     LUCID_INFO("[SettingsPage] initialize() - DONE");
 }
 
@@ -133,10 +135,142 @@ void SettingsPage::setup_models_page() {
     // The Models tab was removed to prevent UI confusion and app crashes
 }
 
-void SettingsPage::setup_advanced_page() {
-    // Advanced tab is no longer shown - all model-related settings were causing crashes
-    // when changed while the app was running (models run in worker threads)
-    // The Advanced tab was removed to prevent crashes
+void SettingsPage::setup_performance_page() {
+    GtkWidget* page = gtk_box_new(GTK_ORIENTATION_VERTICAL, 16);
+    gtk_widget_set_margin_start(page, 12);
+    gtk_widget_set_margin_end(page, 12);
+    gtk_widget_set_margin_top(page, 12);
+    gtk_widget_set_margin_bottom(page, 12);
+    
+    // Page title
+    GtkWidget* title = gtk_label_new(nullptr);
+    gtk_label_set_markup(GTK_LABEL(title), "<span size='large' weight='bold'>Performance</span>");
+    gtk_box_append(GTK_BOX(page), title);
+    
+    // Description
+    GtkWidget* desc = gtk_label_new(
+        "Hardware performance settings. Changes require app restart to take effect."
+    );
+    gtk_label_set_wrap(GTK_LABEL(desc), TRUE);
+    gtk_label_set_justify(GTK_LABEL(desc), GTK_JUSTIFY_LEFT);
+    gtk_box_append(GTK_BOX(page), desc);
+    
+    // Separator
+    GtkWidget* sep1 = gtk_separator_new(GTK_ORIENTATION_HORIZONTAL);
+    gtk_box_append(GTK_BOX(page), sep1);
+    
+    // Hardware Info Section
+    GtkWidget* hw_title = gtk_label_new(nullptr);
+    gtk_label_set_markup(GTK_LABEL(hw_title), "<span size='medium' weight='bold'>Hardware</span>");
+    gtk_widget_set_halign(hw_title, GTK_ALIGN_START);
+    gtk_box_append(GTK_BOX(page), hw_title);
+    
+    // CPU Info
+    lucid::hardware::CPUInfo cpu = lucid::hardware::detect_cpu();
+    std::string cpu_text = "CPU: " + cpu.model_name + 
+                          " (" + std::to_string(cpu.physical_cores) + " cores, " +
+                          std::to_string(cpu.logical_cores) + " threads)";
+    if (cpu.has_smt) cpu_text += " [SMT]";
+    GtkWidget* cpu_label = gtk_label_new(cpu_text.c_str());
+    gtk_widget_set_halign(cpu_label, GTK_ALIGN_START);
+    gtk_box_append(GTK_BOX(page), cpu_label);
+    m_perf_cpu_label = cpu_label;
+    
+    // GPU Info
+    lucid::hardware::GPUInfo gpu = lucid::hardware::detect_gpu();
+    std::string gpu_text = "GPU: ";
+    if (gpu.available) {
+        gpu_text += gpu.name + " (" + gpu.vendor + ")";
+        if (gpu.vram_bytes > 0) {
+            gpu_text += " - " + std::to_string(gpu.vram_bytes / (1024*1024*1024)) + " GB VRAM";
+        }
+        if (gpu.supports_vulkan) gpu_text += " [Vulkan]";
+    } else {
+        gpu_text += "None detected (CPU-only)";
+    }
+    GtkWidget* gpu_label = gtk_label_new(gpu_text.c_str());
+    gtk_widget_set_halign(gpu_label, GTK_ALIGN_START);
+    gtk_box_append(GTK_BOX(page), gpu_label);
+    m_perf_gpu_label = gpu_label;
+    
+    // Memory Info
+    lucid::hardware::MemoryInfo mem = lucid::hardware::detect_memory();
+    std::string mem_text = "Memory: " + 
+                          std::to_string(mem.total_bytes / (1024*1024*1024)) + " GB total, " +
+                          std::to_string(mem.available_bytes / (1024*1024*1024)) + " GB available";
+    GtkWidget* mem_label = gtk_label_new(mem_text.c_str());
+    gtk_widget_set_halign(mem_label, GTK_ALIGN_START);
+    gtk_box_append(GTK_BOX(page), mem_label);
+    m_perf_memory_label = mem_label;
+    
+    // Separator
+    GtkWidget* sep2 = gtk_separator_new(GTK_ORIENTATION_HORIZONTAL);
+    gtk_box_append(GTK_BOX(page), sep2);
+    
+    // GPU Settings Section
+    GtkWidget* gpu_settings_title = gtk_label_new(nullptr);
+    gtk_label_set_markup(GTK_LABEL(gpu_settings_title), "<span size='medium' weight='bold'>GPU Settings</span>");
+    gtk_widget_set_halign(gpu_settings_title, GTK_ALIGN_START);
+    gtk_box_append(GTK_BOX(page), gpu_settings_title);
+    
+    // GPU Enable Row
+    GtkWidget* gpu_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+    GtkWidget* gpu_label_setting = gtk_label_new("Enable GPU acceleration");
+    gtk_widget_set_hexpand(gpu_label_setting, TRUE);
+    gtk_box_append(GTK_BOX(gpu_row), gpu_label_setting);
+    
+    GtkWidget* gpu_switch = gtk_switch_new();
+    gtk_switch_set_active(GTK_SWITCH(gpu_switch), m_use_gpu);
+    g_signal_connect(gpu_switch, "state-set", G_CALLBACK(on_perf_gpu_toggled), this);
+    gtk_box_append(GTK_BOX(gpu_row), gpu_switch);
+    gtk_box_append(GTK_BOX(page), gpu_row);
+    m_perf_gpu_switch = gpu_switch;
+    
+    // Separator
+    GtkWidget* sep3 = gtk_separator_new(GTK_ORIENTATION_HORIZONTAL);
+    gtk_box_append(GTK_BOX(page), sep3);
+    
+    // Thread Settings Section
+    GtkWidget* thread_title = gtk_label_new(nullptr);
+    gtk_label_set_markup(GTK_LABEL(thread_title), "<span size='medium' weight='bold'>Thread Settings</span>");
+    gtk_widget_set_halign(thread_title, GTK_ALIGN_START);
+    gtk_box_append(GTK_BOX(page), thread_title);
+    
+    // Compute threads info
+    int compute_threads = lucid::hardware::get_optimal_compute_threads();
+    int io_threads = lucid::hardware::get_optimal_io_threads();
+    std::string thread_text = "Compute threads: " + std::to_string(compute_threads) + 
+                              " (I/O threads: " + std::to_string(io_threads) + ")";
+    GtkWidget* thread_label = gtk_label_new(thread_text.c_str());
+    gtk_widget_set_halign(thread_label, GTK_ALIGN_START);
+    gtk_box_append(GTK_BOX(page), thread_label);
+    m_perf_thread_count_label = thread_label;
+    
+    // Max parallel jobs info
+    std::string jobs_text = "Max parallel jobs: " + std::to_string(m_max_parallel_jobs);
+    GtkWidget* jobs_label = gtk_label_new(jobs_text.c_str());
+    gtk_widget_set_halign(jobs_label, GTK_ALIGN_START);
+    gtk_box_append(GTK_BOX(page), jobs_label);
+    
+    // Separator
+    GtkWidget* sep4 = gtk_separator_new(GTK_ORIENTATION_HORIZONTAL);
+    gtk_box_append(GTK_BOX(page), sep4);
+    
+    // Note about restart
+    GtkWidget* note = gtk_label_new(
+        "Note: Thread and GPU settings are auto-detected based on your hardware.\n"
+        "For manual configuration, edit ~/.config/lucid/settings.json"
+    );
+    gtk_label_set_wrap(GTK_LABEL(note), TRUE);
+    gtk_label_set_justify(GTK_LABEL(note), GTK_JUSTIFY_LEFT);
+    gtk_box_append(GTK_BOX(page), note);
+    
+    // Spacer
+    GtkWidget* spacer = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    gtk_widget_set_vexpand(spacer, TRUE);
+    gtk_box_append(GTK_BOX(page), spacer);
+    
+    gtk_notebook_append_page(GTK_NOTEBOOK(m_notebook), page, gtk_label_new("Performance"));
 }
 
 void SettingsPage::load_settings() {
@@ -361,6 +495,26 @@ void SettingsPage::on_vision_extract_size_changed(GtkComboBox*, gpointer) {
     LUCID_WARN("[SettingsPage] Vision extract size changed ignored - cannot change while app is running");
 }
 
+void SettingsPage::on_perf_gpu_toggled(GtkSwitch* switch_widget, gpointer data) {
+    auto* self = static_cast<SettingsPage*>(data);
+    if (!self->m_initialized) {
+        LUCID_DEBUG("on_perf_gpu_toggled: ignored (not initialized)");
+        return;
+    }
+    
+    bool enabled = gtk_switch_get_active(switch_widget);
+    LUCID_INFO("[SettingsPage] GPU toggle: %s (restart required for effect)", enabled ? "ON" : "OFF");
+    
+    // Save to ModelManager
+    try {
+        auto& mm = ModelManager::instance();
+        mm.set_use_gpu(enabled);
+        self->m_use_gpu = enabled;
+    } catch (const std::exception& e) {
+        LUCID_ERROR("[SettingsPage] on_perf_gpu_toggled: Exception: %s", e.what());
+    }
+}
+
 void SettingsPage::sync_from_model_manager() {
     // Sync all settings from ModelManager (loaded from config on startup)
     auto& mm = ModelManager::instance();
@@ -407,7 +561,8 @@ void SettingsPage::set_active_tab(const std::string& tab_name) {
     // Map tab name to page index
     std::unordered_map<std::string, int> tab_map = {
         {"general", 0},
-        {"folders", 1}
+        {"folders", 1},
+        {"performance", 2}
     };
     
     auto it = tab_map.find(tab_name);

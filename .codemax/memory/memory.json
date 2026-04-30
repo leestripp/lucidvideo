@@ -65,10 +65,10 @@
       "command": "cmake --build build -j$(nproc) 2>&1 | tail -20",
       "first_used": "2026-04-07T10:10:26Z",
       "id": "bld_4ab8d6f7",
-      "last_used": "2026-04-28T15:05:36Z",
+      "last_used": "2026-04-30T06:15:38Z",
       "notes": "",
       "success": true,
-      "use_count": 22
+      "use_count": 23
     },
     {
       "attempts": 1,
@@ -105,10 +105,10 @@
       "command": "cmake --build build -j$(nproc) 2>&1 | tail -10",
       "first_used": "2026-04-07T21:05:24Z",
       "id": "bld_69ef3d20",
-      "last_used": "2026-04-19T01:48:53Z",
+      "last_used": "2026-04-30T06:27:36Z",
       "notes": "",
       "success": true,
-      "use_count": 20
+      "use_count": 21
     },
     {
       "attempts": 1,
@@ -4636,6 +4636,96 @@
       "first_used": "2026-04-30T04:51:34Z",
       "id": "bld_56c6c463",
       "last_used": "2026-04-30T04:51:34Z",
+      "notes": "",
+      "success": true,
+      "use_count": 1
+    },
+    {
+      "attempts": 1,
+      "command": "cmake --build build 2>&1 | tail -5",
+      "first_used": "2026-04-30T06:12:49Z",
+      "id": "bld_29d302d6",
+      "last_used": "2026-04-30T06:12:49Z",
+      "notes": "",
+      "success": true,
+      "use_count": 1
+    },
+    {
+      "attempts": 1,
+      "command": "./build/tests/lucid_vision_scanner_tests 2>&1 | tail -20",
+      "first_used": "2026-04-30T06:13:30Z",
+      "id": "bld_398b6452",
+      "last_used": "2026-04-30T06:13:30Z",
+      "notes": "",
+      "success": false,
+      "use_count": 1
+    },
+    {
+      "attempts": 1,
+      "command": "ls -lh build/lucidvideo && file build/lucidvideo",
+      "first_used": "2026-04-30T06:15:50Z",
+      "id": "bld_69c6ee2e",
+      "last_used": "2026-04-30T06:15:50Z",
+      "notes": "",
+      "success": true,
+      "use_count": 1
+    },
+    {
+      "attempts": 1,
+      "command": "rm -f /tmp/lucid.log && ./build/lucidvideo > /tmp/lucid.log 2>&1 &\nsleep 10\necho \"=== Health Check ===\" && curl -s http://127.0.0.1:8765/health && echo \"\" && echo \"=== Last 20 lines of log ===\" && tail -20 /tmp/lucid.log && echo \"\" && echo \"=== Process ===\" && ps aux | grep lucidvideo | grep -v grep | head -1",
+      "first_used": "2026-04-30T06:16:10Z",
+      "id": "bld_67de339c",
+      "last_used": "2026-04-30T06:16:10Z",
+      "notes": "",
+      "success": true,
+      "use_count": 1
+    },
+    {
+      "attempts": 1,
+      "command": "pkill -f lucidvideo 2>/dev/null; sleep 2\n./build/lucidvideo > /tmp/lucid.log 2>&1 &\nsleep 8\ncurl -s http://127.0.0.1:8765/health && echo \" - App running!\"",
+      "first_used": "2026-04-30T06:16:15Z",
+      "id": "bld_884cd550",
+      "last_used": "2026-04-30T06:16:15Z",
+      "notes": "",
+      "success": true,
+      "use_count": 1
+    },
+    {
+      "attempts": 1,
+      "command": "pkill -f lucidvideo 2>/dev/null\necho \"Build complete!\"\nls -lh build/lucidvideo",
+      "first_used": "2026-04-30T06:16:18Z",
+      "id": "bld_543d5b9a",
+      "last_used": "2026-04-30T06:16:18Z",
+      "notes": "",
+      "success": true,
+      "use_count": 1
+    },
+    {
+      "attempts": 1,
+      "command": "ls -lh build/lucidvideo",
+      "first_used": "2026-04-30T06:16:22Z",
+      "id": "bld_6067c5c9",
+      "last_used": "2026-04-30T06:16:22Z",
+      "notes": "",
+      "success": true,
+      "use_count": 1
+    },
+    {
+      "attempts": 1,
+      "command": "pkill -f lucidvideo 2>/dev/null; sleep 2\n./build/lucidvideo > /tmp/lucid.log 2>&1 &\nsleep 12\necho \"=== Health Check ===\" && curl -s http://127.0.0.1:8765/health && echo \"\"",
+      "first_used": "2026-04-30T06:18:51Z",
+      "id": "bld_a14d124d",
+      "last_used": "2026-04-30T06:18:51Z",
+      "notes": "",
+      "success": true,
+      "use_count": 1
+    },
+    {
+      "attempts": 1,
+      "command": "cmake --build build -j$(nproc) 2>&1 | grep -E \"error:|undefined|cannot find\" | head -20",
+      "first_used": "2026-04-30T06:27:29Z",
+      "id": "bld_3d15fc5d",
+      "last_used": "2026-04-30T06:27:29Z",
       "notes": "",
       "success": true,
       "use_count": 1
