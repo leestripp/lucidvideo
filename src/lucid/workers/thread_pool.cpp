@@ -223,4 +223,38 @@ size_t ThreadPool::compute_queue_size() const {
     return m_compute_queue.size();
 }
 
+void ThreadPool::set_io_thread_affinity(const std::vector<int>& cpu_cores) {
+#ifdef __linux__
+    std::lock_guard<std::mutex> lock(m_io_mutex);
+    for (size_t i = 0; i < m_io_workers.size() && i < cpu_cores.size(); ++i) {
+        cpu_set_t cpuset;
+        CPU_ZERO(&cpuset);
+        CPU_SET(cpu_cores[i], &cpuset);
+        pthread_t thread = m_io_workers[i].native_handle();
+        if (pthread_setaffinity_np(thread, sizeof(cpu_set_t), &cpuset) == 0) {
+            LUCID_DEBUG("I/O thread %zu pinned to core %d", i, cpu_cores[i]);
+        }
+    }
+#else
+    (void)cpu_cores;  // Not supported on other platforms
+#endif
+}
+
+void ThreadPool::set_compute_thread_affinity(const std::vector<int>& cpu_cores) {
+#ifdef __linux__
+    std::lock_guard<std::mutex> lock(m_compute_mutex);
+    for (size_t i = 0; i < m_compute_workers.size() && i < cpu_cores.size(); ++i) {
+        cpu_set_t cpuset;
+        CPU_ZERO(&cpuset);
+        CPU_SET(cpu_cores[i], &cpuset);
+        pthread_t thread = m_compute_workers[i].native_handle();
+        if (pthread_setaffinity_np(thread, sizeof(cpu_set_t), &cpuset) == 0) {
+            LUCID_DEBUG("Compute thread %zu pinned to core %d", i, cpu_cores[i]);
+        }
+    }
+#else
+    (void)cpu_cores;  // Not supported on other platforms
+#endif
+}
+
 } // namespace lucid

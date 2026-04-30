@@ -4,6 +4,7 @@
 
 #include "vision_scanner.hpp"
 #include "../logging.hpp"
+#include "../utils/hardware.hpp"
 
 #include <filesystem>
 #include <sstream>
@@ -27,10 +28,23 @@ VisionScanner::VisionScanner()
     , m_ctx_vision(nullptr)
     , m_current_bitmap(nullptr)
     , m_tokens_generated(0) {
+    // Initialize with hardware-optimized values
+    m_n_threads = hardware::get_optimal_compute_threads();
+    // Batch size: larger for better throughput
+    m_n_batch = 512;
+    m_n_ctx = 4096;
 }
 
 VisionScanner::~VisionScanner() {
     shutdown();
+}
+
+void VisionScanner::set_thread_count(int n_threads) {
+    m_n_threads = std::max(1, std::min(16, n_threads));
+}
+
+void VisionScanner::set_batch_size(int n_batch) {
+    m_n_batch = std::max(64, std::min(2048, n_batch));
 }
 
 // ============================================================================
@@ -463,6 +477,50 @@ VisionScanResult VisionScanner::parse_and_format_response(
     }
     
     return result;
+}
+
+// ============================================================================
+// Pre-warm
+// ============================================================================
+
+bool VisionScanner::prewarm() {
+    if (!is_loaded()) {
+        LUCID_WARN("[VisionScanner] Cannot prewarm - scanner not loaded");
+        return false;
+    }
+    
+    LUCID_INFO("[VisionScanner] Pre-warming model...");
+    
+    // Create a dummy bitmap for warmup
+    auto ctx = static_cast<mtmd_context*>(m_ctx_vision);
+    auto llctx = static_cast<llama_context*>(m_context);
+    
+    // Warmup with empty prompt
+    struct mtmd_input_text text;
+    text.text = "<__media__>\n";
+    text.add_special = true;
+    text.parse_special = true;
+    
+    mtmd_input_chunks* chunks = mtmd_input_chunks_init();
+    const mtmd_bitmap* bitmaps[1] = { nullptr };
+    
+    // Tokenize (without actual image)
+    int32_t res = mtmd_tokenize(ctx, chunks, &text, bitmaps, 0);
+    if (res != 0) {
+        LUCID_WARN("[VisionScanner] Pre-warm tokenize failed: %d", res);
+        mtmd_input_chunks_free(chunks);
+        return false;
+    }
+    
+    // Run dummy inference to warm up GPU kernels
+    llama_pos new_n_past;
+    mtmd_helper_eval_chunks(ctx, llctx, chunks, 0, 0, m_n_batch, true, &new_n_past);
+    mtmd_input_chunks_free(chunks);
+    
+    m_n_past = 0;
+    
+    LUCID_INFO("[VisionScanner] Pre-warm complete");
+    return true;
 }
 
 // ============================================================================

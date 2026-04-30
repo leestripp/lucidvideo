@@ -68,6 +68,13 @@ public:
     // Get model identifier
     std::string get_model_id() const { return m_model_id; }
     
+    // Performance configuration (call before initialize)
+    void set_thread_count(int n_threads);
+    void set_batch_size(int n_batch);
+    
+    // Pre-warm the model with a dummy inference for faster first use
+    bool prewarm();
+    
     // Shutdown and free resources
     void shutdown();
     

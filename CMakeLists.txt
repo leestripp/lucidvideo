@@ -18,6 +18,19 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Native optimization for current architecture
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native -mtune=native")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 -DNDEBUG")
+
+# Fast math for better SIMD performance (beyond march=native)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ffast-math")
+
+# OpenMP for parallel processing
+find_package(OpenMP)
+if(OpenMP_CXX_FOUND)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+    message(STATUS "OpenMP enabled: ${OpenMP_CXX_FLAGS}")
+else()
+    message(STATUS "OpenMP not found - parallel processing limited to thread pools")
+endif()
+
 # Warning flags - be strict but allow common patterns
 add_compile_options(
     -Wall -Wextra -Wpedantic

@@ -11,6 +11,11 @@
 #include <atomic>
 #include <future>
 
+#ifdef __linux__
+#include <pthread.h>
+#include <sched.h>
+#endif
+
 namespace lucid {
 
 enum class TaskPriority {
@@ -72,6 +77,15 @@ public:
     
     // Check if shutdown
     bool is_shutdown() const { return m_shutdown.load(); }
+    
+    // Get thread counts for monitoring
+    int get_io_thread_count() const { return m_n_io_threads; }
+    int get_compute_thread_count() const { return m_n_compute_threads; }
+    
+    // Thread affinity: pin threads to specific CPU cores
+    // Call after construction, before tasks are submitted
+    void set_io_thread_affinity(const std::vector<int>& cpu_cores);
+    void set_compute_thread_affinity(const std::vector<int>& cpu_cores);
 
 private:
     void io_worker_loop();
