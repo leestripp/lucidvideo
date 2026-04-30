@@ -305,9 +305,8 @@ std::vector<Marker> VideoAnalyst::transcribe_video(
             TRANSCRIBE_DEBUG("No audio stream found");
             MARKER_DEBUG("Adding [NO AUDIO] marker for video %s", video_id.c_str());
             
-            // Check existing markers to avoid unique constraint conflict
-            auto existing = m_db.get_markers(video_id);
-            int next_index = static_cast<int>(existing.size());
+            // Get next index using optimized count query
+            int next_index = m_db.get_marker_count_for_video(video_id);
             
             // Add a "NO AUDIO" marker so user knows this video has no audio
             Marker marker;
@@ -646,9 +645,8 @@ std::vector<VisionAnalysis> VideoAnalyst::scan_thumbnails_with_vision(
                 marker.thumbnail_path = scan_result.thumbnail_path;
                 marker.word_count = static_cast<int>(scan_result.description.length() / 5);
                 
-                // Set segment_index based on existing markers
-                auto existing_markers = m_db.get_markers(video_id);
-                marker.segment_index = static_cast<int>(existing_markers.size());
+                // Set segment_index based on existing marker count (optimized - uses COUNT query)
+                marker.segment_index = m_db.get_marker_count_for_video(video_id);
                 
                 int64_t marker_id = m_db.add_marker(marker);
                 MARKER_DEBUG("  -> VISION marker created with id=%ld", marker_id);
@@ -743,27 +741,23 @@ std::vector<Marker> VideoAnalyst::create_vision_markers(
 }
 
 void VideoAnalyst::update_marker_description(int64_t marker_id, const std::string& description, float confidence) {
-    // Get all markers and find the one with matching ID
-    // Note: This is inefficient but works for now
-    // TODO: Add a direct get_marker_by_id() method to Database for better performance
-    
-    auto markers = m_db.get_markers("");  // Get all markers (empty video_id returns all)
-    for (auto& marker : markers) {
-        if (marker.id == marker_id) {
-            marker.text = description;
-            marker.confidence = confidence;
-            m_db.update_marker(marker);
-            
-            // Generate embedding for the vision description
-            generate_embedding(marker.video_id, marker.id, marker.start_ms, description);
-            
-            PIPELINE_DEBUG("Updated marker %ld with description: %s (confidence: %.2f)", 
-                          marker_id, description.c_str(), confidence);
-            return;
-        }
+    // Get marker by ID directly (optimized - single query)
+    auto marker_opt = m_db.get_marker_by_id(marker_id);
+    if (!marker_opt) {
+        PIPELINE_DEBUG("Marker %ld not found for description update", marker_id);
+        return;
     }
     
-    PIPELINE_DEBUG("Marker %ld not found for description update", marker_id);
+    auto marker = *marker_opt;
+    marker.text = description;
+    marker.confidence = confidence;
+    m_db.update_marker(marker);
+    
+    // Generate embedding for the vision description
+    generate_embedding(marker.video_id, marker.id, marker.start_ms, description);
+    
+    PIPELINE_DEBUG("Updated marker %ld with description: %s (confidence: %.2f)", 
+                  marker_id, description.c_str(), confidence);
 }
 
 std::optional<Pass1Result> VideoAnalyst::analyze_pass1(

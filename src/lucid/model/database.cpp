@@ -730,6 +730,56 @@ void Database::add_markers(const std::string& video_id, const std::vector<Marker
     }
 }
 
+std::optional<Marker> Database::get_marker_by_id(int64_t marker_id) {
+    const char* sql = R"(
+        SELECT id, video_id, segment_index, start_ms, end_ms, 
+               timecode_start, timecode_end, text, confidence, 
+               word_count, word_timestamps, speaker, marker_type, thumbnail_path, frame_number, created_at
+        FROM markers WHERE id = ?
+    )";
+    
+    sqlite3_stmt* stmt;
+    if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        return std::nullopt;
+    }
+    
+    sqlite3_bind_int64(stmt, 1, marker_id);
+    
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        Marker marker;
+        marker.id = sqlite3_column_int64(stmt, 0);
+        marker.video_id = (const char*)sqlite3_column_text(stmt, 1);
+        marker.segment_index = sqlite3_column_int(stmt, 2);
+        marker.start_ms = sqlite3_column_int64(stmt, 3);
+        marker.end_ms = sqlite3_column_int64(stmt, 4);
+        marker.timecode_start = (const char*)sqlite3_column_text(stmt, 5);
+        marker.timecode_end = (const char*)sqlite3_column_text(stmt, 6);
+        marker.text = (const char*)sqlite3_column_text(stmt, 7);
+        marker.confidence = static_cast<float>(sqlite3_column_double(stmt, 8));
+        marker.word_count = sqlite3_column_int(stmt, 9);
+        if (sqlite3_column_type(stmt, 10) != SQLITE_NULL) {
+            marker.word_timestamps_json = (const char*)sqlite3_column_text(stmt, 10);
+        }
+        if (sqlite3_column_type(stmt, 11) != SQLITE_NULL) {
+            marker.speaker = (const char*)sqlite3_column_text(stmt, 11);
+        }
+        if (sqlite3_column_type(stmt, 12) != SQLITE_NULL) {
+            marker.marker_type = marker_type_from_string((const char*)sqlite3_column_text(stmt, 12));
+        }
+        if (sqlite3_column_type(stmt, 13) != SQLITE_NULL) {
+            marker.thumbnail_path = (const char*)sqlite3_column_text(stmt, 13);
+        }
+        if (sqlite3_column_type(stmt, 14) != SQLITE_NULL) {
+            marker.frame_number = sqlite3_column_int64(stmt, 14);
+        }
+        sqlite3_finalize(stmt);
+        return marker;
+    }
+    
+    sqlite3_finalize(stmt);
+    return std::nullopt;
+}
+
 std::vector<Marker> Database::get_markers(const std::string& video_id) {
     std::vector<Marker> results;
     
@@ -1610,6 +1660,25 @@ int Database::get_marker_count() {
     if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr) != SQLITE_OK) {
         return 0;
     }
+    
+    int count = 0;
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        count = sqlite3_column_int(stmt, 0);
+    }
+    
+    sqlite3_finalize(stmt);
+    return count;
+}
+
+int Database::get_marker_count_for_video(const std::string& video_id) {
+    const char* sql = "SELECT COUNT(*) FROM markers WHERE video_id = ?";
+    
+    sqlite3_stmt* stmt;
+    if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        return 0;
+    }
+    
+    sqlite3_bind_text(stmt, 1, video_id.c_str(), -1, SQLITE_TRANSIENT);
     
     int count = 0;
     if (sqlite3_step(stmt) == SQLITE_ROW) {

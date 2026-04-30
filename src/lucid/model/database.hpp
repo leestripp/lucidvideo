@@ -211,6 +211,7 @@ public:
     // Markers (from transcription)
     int64_t add_marker(const Marker& marker);
     void add_markers(const std::string& video_id, const std::vector<Marker>& markers);
+    std::optional<Marker> get_marker_by_id(int64_t marker_id);  // Get single marker by ID (optimized)
     std::vector<Marker> get_markers(const std::string& video_id);
     std::vector<Marker> search_markers(const std::string& query, int limit = 20);
     void update_marker(const Marker& marker);  // Update existing marker (e.g., fill in vision description)
@@ -269,6 +270,7 @@ public:
     int get_video_count_by_status(VideoStatus status);
     int get_total_video_count();
     int get_marker_count();
+    int get_marker_count_for_video(const std::string& video_id);  // Count markers for specific video
     
     // Bulk operations for queue panel
     void clear_all_markers();                           // Clear all markers from all videos
