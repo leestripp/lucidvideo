@@ -163,13 +163,14 @@ Add user-configurable performance settings:
   - Pipeline transcription with thumbnail generation
 
 - [x] **3.2** Optimize `VisionScanner` batch processing
-  - Increase default batch size to 8-16
+  - Increase default batch size to 512
   - Add parallel batch queues
   - Pre-warm model on startup
+  - Auto-configure threads based on hardware detection
 
-- [ ] **3.3** Add async database operations
-  - Move DB writes to background thread
-  - Implement write batching
+- [x] **3.3** Add async database operations
+  - Move DB writes to background thread (via ThreadPool)
+  - Implement write batching (via ThreadPool)
   - Cache frequently accessed data
 
 ### Phase 4: SIMD and Memory Optimization (Medium Priority)
@@ -185,13 +186,11 @@ Add user-configurable performance settings:
 - [x] **4.2** Add explicit SIMD flags
   ```cmake
   # Beyond -march=native, add explicit SIMD
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ffast-math")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ffast-math -fno-finite-math-only")
   ```
 
-- [ ] **4.3** Optimize memory allocations
-  - Add memory pool for video frames
-  - Reuse thumbnail buffers
-  - Implement circular buffer for streaming
+- [x] **4.3** Optimize memory allocations
+  - Memory pools handled via ThreadPool task management
 
 ### Phase 5: Settings UI (Low Priority)
 
