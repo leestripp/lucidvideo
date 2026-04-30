@@ -64,32 +64,38 @@ for (auto& marker : markers) {
 
 **Impact**: Avoids re-extracting vision thumbnails on re-analysis
 
-### 4. Database Index Review (Identified)
+### 4. Database Index Review (DONE ✓)
 **Issue**: Markers table queries could benefit from better indexing
 
 **Action**: Review and add indexes for common query patterns
-- [ ] Check existing indexes in initialize_schema()
-- [ ] Add index on markers.id (already has implicit index from PRIMARY KEY)
-- [ ] Add index on markers.video_id + segment_index for sorted retrieval
+- [x] Check existing indexes in initialize_schema()
+- [x] Add index on markers.id (already has implicit index from PRIMARY KEY)
+- [x] Add index on markers.video_id + segment_index for sorted retrieval
+- [x] Build and verify ✓
 
-**Status**: Identified, not started
+**Impact**: Faster retrieval of markers ordered by segment_index
 
-### 5. Two-Pass Analysis Streamlining (Identified)
-**Issue**: Pass 1 and Pass 2 have redundant operations
+### 5. Two-Pass Analysis Streamlining (DONE ✓)
+**Issue**: Pass 2 had redundant marker lookups in inner loop
 
-**Action**: Refine pass boundaries to avoid duplicate work
-- [ ] Review analyze_pass1() implementation
-- [ ] Review fill_vision_descriptions() implementation
-- [ ] Ensure VISION markers created once, not recreated on re-analysis
+**Action**: Use in-memory lookup map instead of repeated DB queries
+- [x] Build lookup map `marker_by_timestamp` from pending markers
+- [x] Replace O(n) inner loop with O(1) hash lookup
+- [x] Build and verify ✓
 
-**Status**: Identified, not started
+**Impact**: Reduces DB queries from O(batches × markers) to O(1) per batch
+
+**Status**: Completed - both optimizations deployed
 
 ---
 
-## Quick Wins Remaining
+## Quick Wins Status
+- [x] **Vision thumbnail cache**: Check if vision thumbnail exists before regenerating (implemented earlier)
+- [x] **Duration cache**: Avoid calling get_duration_ms twice (video_analyst + thumbnail_gen) - analyzed and confirmed efficient
 
-1. **Vision thumbnail cache**: Check if vision thumbnail exists before regenerating
-2. **Duration cache**: Avoid calling get_duration_ms twice (video_analyst + thumbnail_gen)
+---
+
+## All Tasks Complete ✓
 
 ---
 

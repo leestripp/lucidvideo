@@ -911,6 +911,12 @@ std::optional<Pass2Result> VideoAnalyst::fill_vision_descriptions(
     
     PIPELINE_DEBUG("[Pass2] Found %zu pending VISION markers for %s", pending.size(), video_id.c_str());
     
+    // Build a lookup map for markers by timestamp (optimization - avoid repeated DB queries)
+    std::unordered_map<int64_t, Marker> marker_by_timestamp;
+    for (const auto& marker : pending) {
+        marker_by_timestamp[marker.start_ms] = marker;
+    }
+    
     auto report_progress = [&](const std::string& phase, double progress, const std::string& message) {
         if (progress_callback) {
             AnalysisProgress p;
@@ -942,29 +948,29 @@ std::optional<Pass2Result> VideoAnalyst::fill_vision_descriptions(
         
         for (auto& scan_result : batch_results) {
             if (scan_result.success && !scan_result.description.empty()) {
-                // Find the corresponding marker by timestamp
-                auto all_markers = m_db.get_markers(video_id);
-                for (const auto& marker : all_markers) {
-                    if (marker.marker_type == MarkerType::VISION && 
-                        marker.start_ms == scan_result.timestamp_ms) {
-                        // Update this marker with vision description
-                        update_marker_description(marker.id, scan_result.description, 
-                                                 scan_result.confidence);
-                        
-                        // Add to updated markers list
-                        Marker updated = marker;
-                        updated.text = scan_result.description;
-                        updated.confidence = scan_result.confidence;
-                        result.updated_markers.push_back(updated);
-                        
-                        result.updated_count++;
-                        result.success = true;
-                        
-                        PIPELINE_DEBUG("[Pass2] Updated marker %ld at %ld ms: %s",
-                                      marker.id, scan_result.timestamp_ms, 
-                                      scan_result.description.c_str());
-                        break;
-                    }
+                // Find the corresponding marker using lookup map (O(1) instead of O(n))
+                auto it = marker_by_timestamp.find(scan_result.timestamp_ms);
+                if (it != marker_by_timestamp.end()) {
+                    const auto& marker = it->second;
+                    // Update this marker with vision description
+                    update_marker_description(marker.id, scan_result.description, 
+                                             scan_result.confidence);
+                    
+                    // Add to updated markers list
+                    Marker updated = marker;
+                    updated.text = scan_result.description;
+                    updated.confidence = scan_result.confidence;
+                    result.updated_markers.push_back(updated);
+                    
+                    result.updated_count++;
+                    result.success = true;
+                    
+                    PIPELINE_DEBUG("[Pass2] Updated marker %ld at %ld ms: %s",
+                                  marker.id, scan_result.timestamp_ms, 
+                                  scan_result.description.c_str());
+                } else {
+                    PIPELINE_DEBUG("[Pass2] No marker found for timestamp %ld ms", 
+                                 scan_result.timestamp_ms);
                 }
             } else {
                 PIPELINE_DEBUG("[Pass2] Vision analysis failed: %s", 

@@ -126,6 +126,7 @@ void Database::initialize_schema() {
         
         CREATE INDEX IF NOT EXISTS idx_markers_video ON markers(video_id);
         CREATE INDEX IF NOT EXISTS idx_markers_timestamp ON markers(start_ms);
+        CREATE INDEX IF NOT EXISTS idx_markers_video_segment ON markers(video_id, segment_index);
         
         -- Thumbnails table
         CREATE TABLE IF NOT EXISTS thumbnails (
