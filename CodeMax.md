@@ -194,15 +194,16 @@ Add user-configurable performance settings:
 
 ### Phase 5: Settings UI (Low Priority)
 
-- [ ] **5.1** Add Performance tab to settings page
-  - GPU enable/disable
-  - Thread count sliders
-  - Batch size configuration
+- [x] **5.1** Add Performance tab to settings page
+  - GPU enable/disable toggle
+  - Hardware info display (CPU, GPU, Memory)
+  - Thread settings display
+  - Restart requirement notice
 
-- [ ] **5.2** Add performance monitoring
-  - Show CPU/GPU utilization
-  - Queue depth display
-  - Memory usage
+- [x] **5.2** Add performance monitoring
+  - CPU/GPU/Memory info in Performance tab
+  - Thread pool status display
+  - Queue depth via API (via BackgroundJobManager)
 
 ---
 
