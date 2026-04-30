@@ -263,6 +263,12 @@ std::vector<ThumbnailEntry> VideoAnalyst::generate_thumbnails(
             std::string vision_path = vision_dir + "/" + 
                 fs::path(thumb.path).filename().string();
             
+            // Cache check: skip if vision thumbnail already exists
+            if (fs::exists(vision_path)) {
+                LUCID_DEBUG("[VideoAnalyst] Vision thumbnail cache hit: %s", vision_path.c_str());
+                continue;
+            }
+            
             auto vision_thumb = gen.extract_at(video_path, vision_path, 
                                                 thumb.timestamp_ms, m_vision_thumbnail_size);
             if (vision_thumb) {

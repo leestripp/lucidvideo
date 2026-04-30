@@ -265,10 +265,10 @@
       "command": "cmake --build build -j$(nproc) 2>&1 | tail -15",
       "first_used": "2026-04-05T21:54:45Z",
       "id": "bld_ef0cd1d3",
-      "last_used": "2026-04-29T12:02:03Z",
+      "last_used": "2026-04-30T08:42:05Z",
       "notes": "",
       "success": true,
-      "use_count": 12
+      "use_count": 13
     },
     {
       "attempts": 1,
@@ -4996,6 +4996,16 @@
       "first_used": "2026-04-30T08:40:10Z",
       "id": "bld_d4f41db9",
       "last_used": "2026-04-30T08:40:10Z",
+      "notes": "",
+      "success": true,
+      "use_count": 1
+    },
+    {
+      "attempts": 1,
+      "command": "./build/tests/lucid_video_analyst_tests 2>&1 | tail -30",
+      "first_used": "2026-04-30T08:42:11Z",
+      "id": "bld_88f088e0",
+      "last_used": "2026-04-30T08:42:11Z",
       "notes": "",
       "success": true,
       "use_count": 1

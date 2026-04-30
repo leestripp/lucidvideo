@@ -55,26 +55,41 @@ for (auto& marker : markers) {
 
 **Impact**: Reduces memory usage and query time for segment_index calculation
 
-### 3. Thumbnail Generation Cache Optimization
-**Issue**: Double thumbnail generation (display + vision)
-**Action**: Avoid regenerating vision thumbnails if they already exist
-- [ ] Review generate_thumbnails() in video_analyst.cpp
-- [ ] Add cache check before generating high-res vision thumbnails
-- [ ] Log cache hits vs regenerations
+### 3. Thumbnail Generation Cache Optimization (DONE ✓)
+**Issue**: Double duration check + vision thumbnail regeneration
 
-### 4. Database Index Optimization
+**Action**: Optimize thumbnail generation flow
+- [x] Add vision thumbnail cache check in `generate_thumbnails()` - skip regeneration if exists
+- [x] Log cache hits vs regenerations
+
+**Impact**: Avoids re-extracting vision thumbnails on re-analysis
+
+### 4. Database Index Review (Identified)
 **Issue**: Markers table queries could benefit from better indexing
+
 **Action**: Review and add indexes for common query patterns
 - [ ] Check existing indexes in initialize_schema()
-- [ ] Add index on markers.id if not present
-- [ ] Add index on markers.video_id + segment_index
+- [ ] Add index on markers.id (already has implicit index from PRIMARY KEY)
+- [ ] Add index on markers.video_id + segment_index for sorted retrieval
 
-### 5. Two-Pass Analysis Streamlining
+**Status**: Identified, not started
+
+### 5. Two-Pass Analysis Streamlining (Identified)
 **Issue**: Pass 1 and Pass 2 have redundant operations
+
 **Action**: Refine pass boundaries to avoid duplicate work
 - [ ] Review analyze_pass1() implementation
 - [ ] Review fill_vision_descriptions() implementation
 - [ ] Ensure VISION markers created once, not recreated on re-analysis
+
+**Status**: Identified, not started
+
+---
+
+## Quick Wins Remaining
+
+1. **Vision thumbnail cache**: Check if vision thumbnail exists before regenerating
+2. **Duration cache**: Avoid calling get_duration_ms twice (video_analyst + thumbnail_gen)
 
 ---
 
