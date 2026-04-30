@@ -141,28 +141,28 @@ Add user-configurable performance settings:
 
 ### Phase 2: Thread Pool Optimization (High Priority)
 
-- [ ] **2.1** Create hardware detection module
+- [x] **2.1** Create hardware detection module
   - Get CPU core count (physical vs logical)
   - Get available memory
   - Detect NUMA configuration
 
-- [ ] **2.2** Update `ThreadPool` to use adaptive sizing
+- [x] **2.2** Update `ThreadPool` to use adaptive sizing
   - Calculate I/O threads based on storage type
   - Calculate compute threads based on CPU cores
   - Add affinity hints for compute threads
 
-- [ ] **2.3** Add thread affinity for Whisper/Llama
+- [x] **2.3** Add thread affinity for Whisper/Llama
   - Pin inference threads to specific cores
   - Reduce context switching during inference
 
 ### Phase 3: Parallel Processing (Medium Priority)
 
-- [ ] **3.1** Update `BackgroundJobManager` for parallel video analysis
+- [x] **3.1** Update `BackgroundJobManager` for parallel video analysis
   - Increase `m_max_parallel_jobs` default
   - Allow concurrent video imports
   - Pipeline transcription with thumbnail generation
 
-- [ ] **3.2** Optimize `VisionScanner` batch processing
+- [x] **3.2** Optimize `VisionScanner` batch processing
   - Increase default batch size to 8-16
   - Add parallel batch queues
   - Pre-warm model on startup
@@ -174,7 +174,7 @@ Add user-configurable performance settings:
 
 ### Phase 4: SIMD and Memory Optimization (Medium Priority)
 
-- [ ] **4.1** Add OpenMP support to CMakeLists.txt
+- [x] **4.1** Add OpenMP support to CMakeLists.txt
   ```cmake
   find_package(OpenMP)
   if(OpenMP_CXX_FOUND)
@@ -182,7 +182,7 @@ Add user-configurable performance settings:
   endif()
   ```
 
-- [ ] **4.2** Add explicit SIMD flags
+- [x] **4.2** Add explicit SIMD flags
   ```cmake
   # Beyond -march=native, add explicit SIMD
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ffast-math")

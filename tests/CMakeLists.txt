@@ -181,6 +181,7 @@ add_test(NAME lucid_ffmpeg_pipeline_tests COMMAND lucid_ffmpeg_pipeline_tests)
 add_executable(lucid_vision_scanner_tests
     vision_scanner_tests.cpp
     ${CMAKE_SOURCE_DIR}/src/lucid/vision/vision_scanner.cpp
+    ${CMAKE_SOURCE_DIR}/src/lucid/utils/hardware.cpp
 )
 
 target_link_libraries(lucid_vision_scanner_tests
@@ -201,6 +202,14 @@ target_include_directories(lucid_vision_scanner_tests PRIVATE
 )
 
 add_test(NAME lucid_vision_scanner_tests COMMAND lucid_vision_scanner_tests)
+
+target_include_directories(lucid_vision_scanner_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/third_party/llama.cpp/include
+    ${CMAKE_SOURCE_DIR}/third_party/llama.cpp/tools/mtmd
+    ${CMAKE_SOURCE_DIR}/third_party/llama.cpp/ggml/include
+    ${GLIB_INCLUDE_DIRS}
+)
 
 # ============================================================================
 # AppSettings Tests

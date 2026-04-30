@@ -20,7 +20,9 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native -mtune=native")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 -DNDEBUG")
 
 # Fast math for better SIMD performance (beyond march=native)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ffast-math")
+# NOTE: -ffast-math implies -ffinite-math-only, but llama.cpp/ggml requires -fno-finite-math-only
+# So we use -fno-finite-math-only to allow nan/inf while still getting SIMD benefits
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ffast-math -fno-finite-math-only")
 
 # OpenMP for parallel processing
 find_package(OpenMP)
