@@ -143,7 +143,11 @@ void VideoAnalysisWorker::check_for_work() {
     
     // Update queue callback
     if (m_queue_update_callback) {
-        m_queue_update_callback(static_cast<int>(pending_videos.size()) - 1, 1);
+        try {
+            m_queue_update_callback(static_cast<int>(pending_videos.size()) - 1, 1);
+        } catch (const std::exception& e) {
+            LUCID_ERROR("[VideoAnalysisWorker] Queue update callback exception: %s", e.what());
+        }
     }
     
     // Start processing
@@ -201,7 +205,11 @@ void VideoAnalysisWorker::process_next_video() {
         m_current_progress = progress.progress;
         
         if (m_progress_callback) {
-            m_progress_callback(video_id, "pass1", progress.phase, progress.progress, 0, 0);
+            try {
+                m_progress_callback(video_id, "pass1", progress.phase, progress.progress, 0, 0);
+            } catch (const std::exception& e) {
+                LUCID_ERROR("[VideoAnalysisWorker] Progress callback exception: %s", e.what());
+            }
         }
     };
     
@@ -213,7 +221,18 @@ void VideoAnalysisWorker::process_next_video() {
     // This is fast and updates UI immediately
     LUCID_INFO("VideoAnalysisWorker: Starting Pass 1 (quick analysis)");
     
-    auto pass1_result = analyst.analyze_pass1(video.path, video_id, progress_cb);
+    std::optional<Pass1Result> pass1_result;
+    try {
+        pass1_result = analyst.analyze_pass1(video.path, video_id, progress_cb);
+    } catch (const std::exception& e) {
+        LUCID_ERROR("[VideoAnalysisWorker] Pass 1 analysis threw exception: %s", e.what());
+        mark_video_failed(video_id, std::string("Pass 1 exception: ") + e.what());
+        return;
+    } catch (...) {
+        LUCID_ERROR("[VideoAnalysisWorker] Pass 1 analysis threw unknown exception");
+        mark_video_failed(video_id, "Pass 1 unknown exception");
+        return;
+    }
     
     if (!pass1_result.has_value()) {
         LUCID_ERROR("VideoAnalysisWorker: Pass 1 returned null");
@@ -262,20 +281,37 @@ void VideoAnalysisWorker::process_next_video() {
             vision_analyzed = static_cast<int>(progress * vision_total);
             
             if (m_progress_callback) {
-                m_progress_callback(video_id, "pass2", "Analyzing frames with AI",
-                                   progress, vision_analyzed, vision_total);
+                try {
+                    m_progress_callback(video_id, "pass2", "Analyzing frames with AI",
+                                       progress, vision_analyzed, vision_total);
+                } catch (const std::exception& e) {
+                    LUCID_ERROR("[VideoAnalysisWorker] Vision progress callback exception: %s", e.what());
+                }
             }
         };
         
         // scan_thumbnails_with_vision creates markers WITH actual descriptions from the model
-        auto vision_results = analyst.scan_thumbnails_with_vision(video_id, thumbnails, vision_progress_cb);
+        std::vector<VisionAnalysis> vision_results;
+        try {
+            vision_results = analyst.scan_thumbnails_with_vision(video_id, thumbnails, vision_progress_cb);
+        } catch (const std::exception& e) {
+            LUCID_ERROR("[VideoAnalysisWorker] Pass 2 vision scan threw exception: %s", e.what());
+            vision_results = {};
+        } catch (...) {
+            LUCID_ERROR("[VideoAnalysisWorker] Pass 2 vision scan threw unknown exception");
+            vision_results = {};
+        }
         
         LUCID_INFO("VideoAnalysisWorker: Pass 2 complete - %zu vision analyses created", vision_results.size());
         
         // Trigger UI refresh if any markers were created
         if (!vision_results.empty() && m_vision_update_callback) {
-            LUCID_DEBUG("VideoAnalysisWorker: Triggering vision update callback");
-            m_vision_update_callback(video_id);
+            try {
+                LUCID_DEBUG("VideoAnalysisWorker: Triggering vision update callback");
+                m_vision_update_callback(video_id);
+            } catch (const std::exception& e) {
+                LUCID_ERROR("[VideoAnalysisWorker] Vision update callback exception: %s", e.what());
+            }
         }
     } else {
         LUCID_INFO("VideoAnalysisWorker: Pass 2 skipped (no thumbnails or vision model not available)");
@@ -297,9 +333,15 @@ void VideoAnalysisWorker::mark_video_completed(const std::string& video_id) {
     
     LUCID_INFO("VideoAnalysisWorker: Invoking completion callback");
     if (m_completion_callback) {
-        LUCID_INFO("VideoAnalysisWorker: Calling completion callback with video_id=%s", video_id.c_str());
-        m_completion_callback(video_id, true, "");
-        LUCID_INFO("VideoAnalysisWorker: Completion callback returned");
+        try {
+            LUCID_INFO("VideoAnalysisWorker: Calling completion callback with video_id=%s", video_id.c_str());
+            m_completion_callback(video_id, true, "");
+            LUCID_INFO("VideoAnalysisWorker: Completion callback returned");
+        } catch (const std::exception& e) {
+            LUCID_ERROR("[VideoAnalysisWorker] Completion callback exception: %s", e.what());
+        } catch (...) {
+            LUCID_ERROR("[VideoAnalysisWorker] Completion callback unknown exception");
+        }
     } else {
         LUCID_WARN("VideoAnalysisWorker: Completion callback is NULL!");
     }
@@ -320,7 +362,13 @@ void VideoAnalysisWorker::mark_video_failed(const std::string& video_id, const s
     m_current_progress = 0.0f;
     
     if (m_completion_callback) {
-        m_completion_callback(video_id, false, error);
+        try {
+            m_completion_callback(video_id, false, error);
+        } catch (const std::exception& e) {
+            LUCID_ERROR("[VideoAnalysisWorker] Completion callback (fail) exception: %s", e.what());
+        } catch (...) {
+            LUCID_ERROR("[VideoAnalysisWorker] Completion callback (fail) unknown exception");
+        }
     }
     
     // Trigger immediate check for next video

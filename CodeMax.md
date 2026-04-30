@@ -1,159 +1,135 @@
-# LucidVideo Performance Enhancements - Task List
-
-## System Information
-| Component | Value |
-|-----------|-------|
-| Kernel | Linux 6.18.22-1.stable |
-| OS | Arch Linux (x86_64) |
-| Container | docker/podman (archlinux:latest) |
-| Display | Wayland, GNOME |
-| Architecture | x86_64 |
+# LucidVideo - Crash Fix Task List
 
 ## Project Info
-- **Version**: 0.4.1
-- **Binary**: build/lucidvideo (71MB)
-- **Build System**: CMake with C++20
+- **Language**: C++20
+- **Build System**: CMake
+- **Framework**: GTK4, libadwaita
+- **Architecture**: GTK Application with worker threads
 
-## Overview
-Performance enhancements to the video analysis pipeline, focusing on:
-- Two-pass analysis optimization
-- Vision scanning efficiency
-- Database query optimization
-- Batch processing improvements
+## Crash Analysis
 
----
+### Root Cause: Dangling References from Detached Threads
+
+The application crashes because detached threads capture `this` via lambda and continue running after `MainWindow` destruction. When the window is destroyed:
+
+1. **Lambda threads** access destructed `this` pointer
+2. **Callback objects** reference destroyed UI components  
+3. **Member unique_ptr** members are destroyed while threads still hold references
+
+### Bug Locations Found:
+
+1. **main_window.cpp:923** - Chat message LLM generation thread
+2. **main_window.cpp:1329** - Folder scan thread  
+3. **chat_session.cpp:142** - Async generation thread
+4. **folder_browser.cpp:65** - Async folder selection thread
+5. **model_manager.cpp:729** - Model download thread (different issue)
 
 ## Tasks
 
-### 1. Database Query Optimization (DONE ✓)
-**Issue**: `update_marker_description()` in video_analyst.cpp used inefficient workaround:
-```cpp
-// Before (inefficient):
-auto markers = m_db.get_markers("");  // Gets ALL markers from ALL videos
-for (auto& marker : markers) {
-    if (marker.id == marker_id) { ... }
-}
+### TODO 1: Fix MainWindow Destructor - Add shutdown flag for detached threads
+**File**: `src/lucid/gui/main_window.cpp` + `src/lucid/gui/main_window.hpp`
+
+**Problem**: 
+- Destructor is `= default;` with no cleanup
+- Detached threads continue running during destruction
+- Lambda threads capture `this` by value, accessing destructed members
+
+**Fix**:
+- Add `std::atomic<bool> m_shutdown{false}` to MainWindow
+- Add destructor with cleanup that sets shutdown flag
+- All detached threads must check shutdown flag before accessing members
+- Add mutex-protected access for any shared state
+
+### TODO 2: Fix Chat LLM Generation Thread - Race condition at line 923
+**File**: `src/lucid/gui/main_window.cpp`
+
+**Problem**: Lambda captures `this` by value, accessing `m_chat_panel` after potential destruction
+
+**Fix**:
+- Check `m_shutdown` flag before accessing `m_chat_panel`
+- Use weak_ptr pattern or add destruction guards
+- Ensure UI dispatch only if window still valid
+
+### TODO 3: Fix Folder Scan Thread - Race condition at line 1329  
+**File**: `src/lucid/gui/main_window.cpp`
+
+**Problem**: Lambda captures `this` and accesses `m_status_label`, `m_home_view` after potential destruction
+
+**Fix**:
+- Check `m_shutdown` before accessing GTK widgets
+- Use `g_idle_add` with guard for widget validity
+- Only update UI if widget still exists
+
+### TODO 4: Fix FolderBrowser Async Thread - FolderBrowser destruction
+**File**: `src/lucid/gui/folder_browser.cpp`
+
+**Problem**: `shared_ptr<AsyncData>` captured in lambda but `FolderBrowser` may be destroyed before callback completes
+
+**Fix**:
+- Add shutdown flag to FolderBrowser
+- Ensure async_data mutex lock survives object destruction
+- The current code uses `async_data.get()` not shared_ptr, which is correct - but needs shutdown guard
+
+### TODO 5: Fix ChatSession Async Thread
+**File**: `src/lucid/inference/chat_session.cpp`
+
+**Problem**: Lambda captures `this` and accesses `m_engine`, `m_messages` after potential destruction
+
+**Fix**:
+- Add shutdown mechanism to ChatSession
+- Guard all member access in lambda
+
+### TODO 6: Fix VideoAnalysisWorker Callbacks - Cross-thread safety
+**File**: `src/lucid/model/video_analysis_worker.cpp`
+
+**Problem**: Worker calls UI callbacks from worker thread, not main thread
+
+**Fix**:
+- All UI callbacks MUST be dispatched to main thread via `g_idle_add` or `Glib::signal_idle()`
+- Currently some callbacks might be called directly from worker thread
+
+### TODO 7: Fix ModelManager Download Thread
+**File**: `src/lucid/model/model_manager.cpp`
+
+**Problem**: Download thread detached, captures `this` (singleton pattern issue)
+
+**Fix**:
+- ModelManager is a singleton, should be alive for app lifetime
+- But callbacks might be invoked during shutdown
+- Add proper shutdown sequence
+
+### TODO 8: Verify Settings Page Thread Safety
+**File**: `src/lucid/gui/settings_page.cpp`
+
+**Problem**: Settings page has combo boxes, callbacks that might race
+
+**Fix**: Check for similar detached thread patterns
+
+### TODO 9: Build and Test - Verify no crashes
+**Command**: 
+```bash
+rm -rf build && cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j$(nproc)
 ```
 
-**Action**: Added optimized methods to Database class
-- [x] Add `get_marker_by_id(int64_t marker_id)` method declaration to database.hpp
-- [x] Implement method in database.cpp with direct SQL query by ID
-- [x] Update `update_marker_description()` in video_analyst.cpp to use new method
-- [x] Build and verify ✓ (all 45 database tests passed)
+**Test**: Run app multiple times, check for crashes
 
-**Impact**: O(n) → O(1) for marker description updates during vision scanning
+## Implementation Order
 
-### 2. Batch Processing for Vision Scanning (Optimized)
-**Issue**: Vision scanning had redundant marker lookups
+1. First add shutdown flag and destructor to MainWindow
+2. Fix all detached lambda threads to check shutdown flag
+3. Ensure all UI updates are dispatched to main thread
+4. Build and verify
 
-**Action**: Added marker count optimization
-- [x] Add `get_marker_count_for_video(const std::string& video_id)` method to database.hpp
-- [x] Implement in database.cpp with COUNT query
-- [x] Update `transcribe_video()` to use optimized count instead of loading all markers
-- [x] Update `scan_thumbnails_with_vision()` to use optimized count instead of loading all markers
-- [x] Build and verify ✓
+## Files to Modify
 
-**Impact**: Reduces memory usage and query time for segment_index calculation
+1. `src/lucid/gui/main_window.hpp` - Add shutdown flag
+2. `src/lucid/gui/main_window.cpp` - Fix destructor, all lambda threads
+3. `src/lucid/inference/chat_session.cpp` - Add shutdown guard
+4. `src/lucid/gui/folder_browser.cpp` - Add shutdown guard  
+5. `src/lucid/model/video_analysis_worker.cpp` - Ensure main thread dispatch
 
-### 3. Thumbnail Generation Cache Optimization (DONE ✓)
-**Issue**: Double duration check + vision thumbnail regeneration
+## Notes
 
-**Action**: Optimize thumbnail generation flow
-- [x] Add vision thumbnail cache check in `generate_thumbnails()` - skip regeneration if exists
-- [x] Log cache hits vs regenerations
-
-**Impact**: Avoids re-extracting vision thumbnails on re-analysis
-
-### 4. Database Index Review (DONE ✓)
-**Issue**: Markers table queries could benefit from better indexing
-
-**Action**: Review and add indexes for common query patterns
-- [x] Check existing indexes in initialize_schema()
-- [x] Add index on markers.id (already has implicit index from PRIMARY KEY)
-- [x] Add index on markers.video_id + segment_index for sorted retrieval
-- [x] Build and verify ✓
-
-**Impact**: Faster retrieval of markers ordered by segment_index
-
-### 5. Two-Pass Analysis Streamlining (DONE ✓)
-**Issue**: Pass 2 had redundant marker lookups in inner loop
-
-**Action**: Use in-memory lookup map instead of repeated DB queries
-- [x] Build lookup map `marker_by_timestamp` from pending markers
-- [x] Replace O(n) inner loop with O(1) hash lookup
-- [x] Build and verify ✓
-
-**Impact**: Reduces DB queries from O(batches × markers) to O(1) per batch
-
-**Status**: Completed - both optimizations deployed
-
----
-
-## Quick Wins Status
-- [x] **Vision thumbnail cache**: Check if vision thumbnail exists before regenerating (implemented earlier)
-- [x] **Duration cache**: Avoid calling get_duration_ms twice (video_analyst + thumbnail_gen) - analyzed and confirmed efficient
-
----
-
-## All Tasks Complete ✓
-
----
-
-## Implementation Notes
-
-### Task 1 Details: get_marker_by_id()
-
-**database.hpp additions** (in Database class):
-```cpp
-// Get a single marker by ID (optimization)
-std::optional<Marker> get_marker_by_id(int64_t marker_id);
-```
-
-**database.cpp implementation**:
-```cpp
-std::optional<Marker> Database::get_marker_by_id(int64_t marker_id) {
-    const char* sql = R"(
-        SELECT id, video_id, segment_index, start_ms, end_ms, 
-               timecode_start, timecode_end, text, confidence, 
-               word_count, word_timestamps, speaker, marker_type, thumbnail_path, frame_number, created_at
-        FROM markers WHERE id = ?
-    )";
-    // ... execute with marker_id, return marker or nullopt
-}
-```
-
-**video_analyst.cpp fix**:
-Replace the inefficient loop in `update_marker_description()` with a direct call:
-```cpp
-void VideoAnalyst::update_marker_description(int64_t marker_id, const std::string& description, float confidence) {
-    auto marker_opt = m_db.get_marker_by_id(marker_id);
-    if (!marker_opt) {
-        PIPELINE_DEBUG("Marker %ld not found for description update", marker_id);
-        return;
-    }
-    
-    auto marker = *marker_opt;
-    marker.text = description;
-    marker.confidence = confidence;
-    m_db.update_marker(marker);
-    
-    // Generate embedding for the vision description
-    generate_embedding(marker.video_id, marker.id, marker.start_ms, description);
-    
-    PIPELINE_DEBUG("Updated marker %ld with description: %s (confidence: %.2f)", 
-                  marker_id, description.c_str(), confidence);
-}
-```
-
----
-
-## Testing
-- Run `./build/tests/lucid_*` test suites
-- Test video analysis pipeline manually
-- Verify marker updates work correctly
-
----
-
-## Status
-- **Last Updated**: 2026-04-30
-- **Started**: Phase 6 - Performance Enhancements
+- All UI updates from background threads MUST go through `g_idle_add` or `Glib::signal_idle()`
+- Detached threads should capture weak references or check shutdown before accessing members
+- The `m_shutdown` flag pattern is simplest for this codebase

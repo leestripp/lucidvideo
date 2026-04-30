@@ -34,14 +34,21 @@ namespace lucid {
 
 MainWindow::MainWindow()
     : Gtk::ApplicationWindow() {
+    LUCID_DEBUG("[MainWindow] Constructor START");
+    
     set_title("Lucid - Video Library");
     property_default_width() = 1200;
     property_default_height() = 800;
     
+    LUCID_DEBUG("[MainWindow] Creating Database...");
     // Initialize core components
     std::string db_path = Glib::build_filename(Glib::get_user_data_dir(), "lucid", "lucid.db");
     m_db = std::make_unique<Database>(db_path);
+    LUCID_DEBUG("[MainWindow] Database created");
+    
+    LUCID_DEBUG("[MainWindow] Creating VideoIndexer...");
     m_indexer = std::make_unique<VideoIndexer>(*m_db);
+    LUCID_DEBUG("[MainWindow] Creating SemanticSearch...");
     m_search = std::make_unique<SemanticSearch>(*m_db);
 
     // Initialize semantic search with embedding model from ModelManager
@@ -81,25 +88,37 @@ MainWindow::MainWindow()
     m_chat_session->set_engine(m_llm_engine.get());
     
     // Initialize ChatContext for video library integration
+    LUCID_DEBUG("[MainWindow] Creating ChatContext...");
     m_chat_context = std::make_unique<ChatContext>(m_db.get(), m_search.get());
+    LUCID_DEBUG("[MainWindow] ChatContext created");
     
     // Wire LLM query enhancer to the engine
     m_llm_enhancer->set_engine(m_llm_engine.get());
     
     // Set up system prompt for video library assistant
     // This base prompt will be enhanced with video context in on_chat_message_submitted
+    LUCID_DEBUG("[MainWindow] Setting system message...");
     m_chat_session->set_system_message(
         "You are a helpful assistant for a video library application called Lucid. "
         "You can help users find videos, answer questions about their library, and provide information. "
         "Keep responses concise and helpful. "
         "When users ask about videos or search for content, be specific and reference actual video titles from their library.");
+    LUCID_DEBUG("[MainWindow] System message set");
     
     // Setup UI
+    LUCID_DEBUG("[MainWindow] Calling setup_ui()...");
     setup_ui();
+    LUCID_DEBUG("[MainWindow] setup_ui() done");
+    
     setup_keyboard_shortcuts();
+    LUCID_DEBUG("[MainWindow] setup_keyboard_shortcuts() done");
     
     // Initialize UI components after setup_ui() creates containers
+    LUCID_DEBUG("[MainWindow] Initializing settings page...");
+    LUCID_INFO("MainWindow: calling settings_page->initialize()");
     m_settings_page->initialize(nullptr);
+    LUCID_INFO("MainWindow: settings_page->initialize() returned");
+    LUCID_DEBUG("[MainWindow] Settings page initialized");
     
     // Sync model selections from ModelManager (which loads from config on startup)
     m_settings_page->sync_from_model_manager();
@@ -120,9 +139,13 @@ MainWindow::MainWindow()
     });
     
     m_model_hub_page->initialize(nullptr);
+    LUCID_INFO("MainWindow: model_hub_page->initialize() done");
     m_video_grid->initialize(nullptr);
+    LUCID_INFO("MainWindow: video_grid->initialize() done");
     m_search_panel->initialize(nullptr);
+    LUCID_INFO("MainWindow: search_panel->initialize() done");
     m_analysis_queue_panel->initialize(nullptr);  // 🔄 NEW
+    LUCID_INFO("MainWindow: analysis_queue_panel->initialize() done");
     
     // VideoList has its own internal pagination widget - use it directly
     // Set up page change callback to reload videos and save settings
@@ -156,9 +179,20 @@ MainWindow::MainWindow()
     refresh_video_list();
     
     LUCID_INFO("Lucid main window initialized");
+    LUCID_DEBUG("[MainWindow] Constructor END - window is ready");
 }
 
-MainWindow::~MainWindow() = default;
+MainWindow::~MainWindow() {
+    LUCID_DEBUG("[MainWindow] Destructor START - signaling shutdown");
+    
+    // Signal shutdown to all detached threads
+    set_shutting_down();
+    
+    // Wait a moment for threads to notice the flag
+    // (Note: threads will check flag before accessing members)
+    
+    LUCID_DEBUG("[MainWindow] Destructor END");
+}
 
 Glib::RefPtr<MainWindow> MainWindow::create() {
     return Glib::RefPtr<MainWindow>(new MainWindow());
@@ -891,7 +925,12 @@ void MainWindow::on_chat_message_submitted(const std::string& message) {
         }
         
         // Update UI on main thread (capture this to access m_chat_panel)
+        // MUST check shutdown flag before accessing UI members
         Glib::signal_idle().connect_once([this, response, success]() {
+            if (is_shutting_down()) {
+                LUCID_DEBUG("[MainWindow] Shutdown in progress, skipping chat response update");
+                return;
+            }
             if (m_chat_panel) {
                 m_chat_panel->on_response_ready(response, success);
             }
@@ -1290,9 +1329,14 @@ void MainWindow::scan_folder(const std::string& folder_path) {
         m_current_folder = folder_path;
         
         // Update UI on main thread
+        // MUST check shutdown flag before accessing UI members
         g_idle_add_full(G_PRIORITY_DEFAULT, 
             +[](gpointer user_data) -> gboolean {
                 auto* self = static_cast<MainWindow*>(user_data);
+                if (self->is_shutting_down()) {
+                    LUCID_DEBUG("[MainWindow] Shutdown in progress, skipping folder scan UI update");
+                    return G_SOURCE_REMOVE;
+                }
                 self->show_home();
                 self->refresh_video_list();
                 
@@ -1442,6 +1486,13 @@ void MainWindow::register_analysis_callbacks(Glib::RefPtr<LucidApp> app) {
                 int vis_ana = std::get<5>(*args);
                 int vis_tot = std::get<6>(*args);
                 
+                // CRITICAL: Check shutdown flag before accessing any members
+                if (win->is_shutting_down()) {
+                    LUCID_DEBUG("[MainWindow] Shutdown in progress, skipping progress callback");
+                    delete args;
+                    return G_SOURCE_REMOVE;
+                }
+                
                 // Update queue panel with progress - pass-aware
                 if (win->m_analysis_queue_panel) {
                     win->m_analysis_queue_panel->on_progress(vid, pass, ph, prog, vis_ana, vis_tot);
@@ -1470,6 +1521,13 @@ void MainWindow::register_analysis_callbacks(Glib::RefPtr<LucidApp> app) {
                 std::string vid = std::get<1>(*args);
                 bool ok = std::get<2>(*args);
                 std::string err = std::get<3>(*args);
+                
+                // CRITICAL: Check shutdown flag before accessing any members
+                if (win->is_shutting_down()) {
+                    LUCID_DEBUG("[MainWindow] Shutdown in progress, skipping completion callback");
+                    delete args;
+                    return G_SOURCE_REMOVE;
+                }
                 
                 LUCID_INFO("g_idle callback executing: calling on_complete for video_id=%s", vid.c_str());
                 
@@ -1505,6 +1563,13 @@ void MainWindow::register_analysis_callbacks(Glib::RefPtr<LucidApp> app) {
                 auto* args = static_cast<std::tuple<MainWindow*, std::string>*>(data);
                 auto* win = std::get<0>(*args);
                 std::string vid = std::get<1>(*args);
+                
+                // CRITICAL: Check shutdown flag before accessing any members
+                if (win->is_shutting_down()) {
+                    LUCID_DEBUG("[MainWindow] Shutdown in progress, skipping vision update callback");
+                    delete args;
+                    return G_SOURCE_REMOVE;
+                }
                 
                 LUCID_DEBUG("Vision update: refreshing timeline for video_id=%s", vid.c_str());
                 win->refresh_timeline();
@@ -1771,6 +1836,13 @@ void MainWindow::register_analysis_callbacks(Glib::RefPtr<LucidApp> app) {
                 auto* win = std::get<0>(*args);
                 int pending = std::get<1>(*args);
                 int processing = std::get<2>(*args);
+                
+                // CRITICAL: Check shutdown flag before accessing any members
+                if (win->is_shutting_down()) {
+                    LUCID_DEBUG("[MainWindow] Shutdown in progress, skipping queue update callback");
+                    delete args;
+                    return G_SOURCE_REMOVE;
+                }
                 
                 if (win->m_analysis_queue_panel) {
                     win->m_analysis_queue_panel->update_queue(pending, processing);

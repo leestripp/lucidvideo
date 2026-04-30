@@ -11,6 +11,8 @@ namespace lucid {
 ChatSession::ChatSession() = default;
 
 ChatSession::~ChatSession() {
+    // Mark as shutting down to prevent async callbacks
+    m_shutdown.store(true);
     stop();
 }
 
@@ -122,12 +124,28 @@ void ChatSession::generate_response_async(CompleteCallback on_complete) {
         return;
     }
     
+    // Check if shutting down before starting thread
+    if (m_shutdown.load()) {
+        LUCID_WARN("[ChatSession] Shutting down, not starting async generation");
+        if (on_complete) on_complete("", false);
+        return;
+    }
+    
     // Run generation in background thread
     std::thread([this, on_complete]() {
+        // Check shutdown flag before doing work
+        if (m_shutdown.load()) {
+            LUCID_DEBUG("[ChatSession] Shutdown during async generation");
+            if (on_complete) on_complete("", false);
+            return;
+        }
+        
         std::string response;
         bool success = false;
         
         auto callback = [&response](const std::string& token) -> bool {
+            // Check shutdown during generation
+            // Note: Can't check m_shutdown here without capturing 'this'
             response += token;
             return true;
         };
@@ -135,6 +153,12 @@ void ChatSession::generate_response_async(CompleteCallback on_complete) {
         generate_response(callback);
         
         success = !response.empty();
+        
+        // Check shutdown before invoking callback
+        if (m_shutdown.load()) {
+            LUCID_DEBUG("[ChatSession] Shutdown after generation, skipping callback");
+            return;
+        }
         
         if (on_complete) {
             on_complete(response, success);
@@ -151,6 +175,12 @@ void ChatSession::generate_with_context(const std::string& context, TokenCallbac
     
     if (m_messages.empty()) {
         LUCID_WARN("[ChatSession] No messages to respond to");
+        return;
+    }
+    
+    // Check shutdown flag
+    if (m_shutdown.load()) {
+        LUCID_WARN("[ChatSession] Shutting down, skipping context generation");
         return;
     }
     

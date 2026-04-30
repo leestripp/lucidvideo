@@ -7,6 +7,8 @@
 #include <string>
 #include <functional>
 #include <unordered_map>
+#include <atomic>
+#include <mutex>
 
 #include "../model/database.hpp"
 #include "timeline_widget.hpp"
@@ -78,7 +80,7 @@ struct VideoState {
 class MainWindow : public Gtk::ApplicationWindow {
 public:
     static Glib::RefPtr<MainWindow> create();
-    ~MainWindow() override;
+    ~MainWindow();
     
     // Friend classes for UI navigation
     friend class SettingsPage;
@@ -106,6 +108,22 @@ public:
     
 private:
     MainWindow();
+    
+    // Shutdown guard for detached threads
+    std::atomic<bool> m_shutdown{false};
+    mutable std::mutex m_shutdown_mutex;  // Protects shutdown state
+    
+    // Check if window is shutting down (for detached thread safety)
+    bool is_shutting_down() const {
+        std::lock_guard<std::mutex> lock(m_shutdown_mutex);
+        return m_shutdown;
+    }
+    
+    // Mark window as shutting down (call from destructor)
+    void set_shutting_down() {
+        std::lock_guard<std::mutex> lock(m_shutdown_mutex);
+        m_shutdown = true;
+    }
     
     // Pending seek position (for seeking to marker when loading video)
     int64_t m_pending_seek_ms = -1;

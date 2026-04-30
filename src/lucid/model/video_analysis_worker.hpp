@@ -16,6 +16,9 @@
 #include <mutex>
 #include <functional>
 
+// GLib for main context dispatch
+#include <glib.h>
+
 namespace lucid {
 
 // ============================================================================

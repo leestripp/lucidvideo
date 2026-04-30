@@ -8,6 +8,7 @@
 #include <vector>
 #include <string>
 #include <functional>
+#include <atomic>
 
 namespace lucid {
 
@@ -26,6 +27,10 @@ public:
     // Session management
     void clear();
     bool is_active() const { return m_active; }
+    
+    // Shutdown guard for async operations
+    bool is_shutting_down() const { return m_shutdown.load(); }
+    void mark_shutting_down() { m_shutdown.store(true); }
     
     // Message management
     void add_user_message(const std::string& content);
@@ -73,6 +78,7 @@ private:
     
     // State
     bool m_active = false;
+    std::atomic<bool> m_shutdown{false};
     int m_max_history = 50;  // Max user/assistant pairs to keep
 };
 

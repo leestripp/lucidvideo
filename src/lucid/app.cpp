@@ -31,16 +31,31 @@ Glib::RefPtr<LucidApp> g_app;
 // Helper to dispatch calls to the GTK main thread from control server
 // The control server runs in a separate thread, so GTK calls must be dispatched
 // This version uses g_idle_add which schedules for when the main loop is idle
+// Wrapped in try-catch to prevent crashes from exceptions in dispatched functions
 static gboolean control_server_dispatch_helper(gpointer data) {
-    auto* func = static_cast<std::function<void()>*>(data);
-    (*func)();
-    delete func;
+    try {
+        auto* func = static_cast<std::function<void()>*>(data);
+        if (func) {
+            (*func)();
+            delete func;
+        }
+    } catch (const std::exception& e) {
+        LUCID_ERROR("[ControlServer] Exception in dispatch helper: %s", e.what());
+    } catch (...) {
+        LUCID_ERROR("[ControlServer] Unknown exception in dispatch helper");
+    }
     return FALSE;  // One-shot, remove the source
 }
 
 static void dispatch_to_main_thread(std::function<void()> func) {
-    auto* func_copy = new std::function<void()>(std::move(func));
-    g_idle_add_full(G_PRIORITY_HIGH, control_server_dispatch_helper, func_copy, nullptr);
+    try {
+        auto* func_copy = new std::function<void()>(std::move(func));
+        g_idle_add_full(G_PRIORITY_HIGH, control_server_dispatch_helper, func_copy, nullptr);
+    } catch (const std::exception& e) {
+        LUCID_ERROR("[ControlServer] Failed to dispatch to main thread: %s", e.what());
+    } catch (...) {
+        LUCID_ERROR("[ControlServer] Failed to dispatch to main thread (unknown error)");
+    }
 }
 
 // Load CSS styles for the application
@@ -365,11 +380,15 @@ void LucidApp::on_activate() {
     // Start control server for external API access
     start_control_server();
     
+    LUCID_INFO("on_activate: starting window creation");
+    
     // Create window if not exists
     if (get_windows().empty()) {
         LUCID_INFO("No windows, calling create_window()");
         create_window();
         LUCID_INFO("create_window() returned, window count: %zu", get_windows().size());
+    } else {
+        LUCID_INFO("on_activate: window already exists, skipping create");
     }
     
     // Present the first window
@@ -425,8 +444,9 @@ void LucidApp::create_window() {
     try {
         // Create the main window using MainWindow::create()
         // Store in member variable to prevent destruction
+        LUCID_DEBUG("Calling MainWindow::create()...");
         m_window = MainWindow::create();
-        LUCID_DEBUG("MainWindow created");
+        LUCID_DEBUG("MainWindow::create() returned, about to add_window");
         
         // Add window to application
         add_window(*m_window);
@@ -451,12 +471,19 @@ void LucidApp::create_window() {
         }
         
         // Show the window
+        LUCID_DEBUG("Calling m_window->show()...");
         m_window->show();
-        LUCID_DEBUG("Window show() called");
+        LUCID_DEBUG("m_window->show() returned");
         
         // Check if window is in application
         auto windows = get_windows();
         LUCID_DEBUG("Window count from get_windows(): %zu", windows.size());
+        
+        // Check window properties
+        LUCID_DEBUG("Window visible: %d, mapped: %d, realized: %d", 
+                    gtk_widget_get_visible(GTK_WIDGET(m_window->gobj())),
+                    gtk_widget_get_mapped(GTK_WIDGET(m_window->gobj())),
+                    gtk_widget_get_realized(GTK_WIDGET(m_window->gobj())));
         
         LUCID_INFO("Main window created and displayed");
     } catch (const std::exception& e) {
@@ -1792,6 +1819,9 @@ void LucidApp::setup_control_server_handlers() {
                             // STALE videos are also pending for reprocessing
                             pending++;
                             break;
+                        case VideoStatus::BROKEN:
+                            // BROKEN videos need manual intervention - don't add to any count
+                            break;
                     }
                 }
                 
@@ -1849,6 +1879,9 @@ void LucidApp::setup_control_server_handlers() {
                             break;
                         case VideoStatus::STALE:
                             match = (filter == "pending");
+                            break;
+                        case VideoStatus::BROKEN:
+                            match = (filter == "broken");
                             break;
                     }
                     if (!match) continue;
@@ -2096,6 +2129,9 @@ void LucidApp::setup_control_server_handlers() {
                             break;
                         case VideoStatus::STALE:
                             should_reset = (filter == "pending");
+                            break;
+                        case VideoStatus::BROKEN:
+                            should_reset = (filter == "broken");
                             break;
                     }
                 }
