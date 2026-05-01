@@ -2,8 +2,33 @@
 #include "search_results_panel.hpp"
 #include "../search/semantic_search.hpp"
 #include "../logging.hpp"
+#include <regex>
 
 namespace lucid {
+
+// Helper function to clean vision scan text for display
+static std::string clean_snippet_for_display(const std::string& text) {
+    if (text.empty()) return text;
+    
+    std::string result = text;
+    
+    // Remove object reference tags like <|object_ref_start|>text<|object_ref_end|>
+    static const std::regex obj_ref_regex(R"(<\|object_ref_\w+\|>|<\|box_\w+\([^)]*\)\|>)");
+    result = std::regex_replace(result, obj_ref_regex, "");
+    
+    // Remove vision prompt prefix if present
+    static const std::regex prompt_prefix_regex(R"(Analyze this video frame and describe:.*?\n\n)",
+                                                std::regex::icase);
+    result = std::regex_replace(result, prompt_prefix_regex, "");
+    
+    // Clean up multiple spaces and newlines
+    result = std::regex_replace(result, std::regex(R"(\s+)"), " ");
+    
+    // Trim
+    result = std::regex_replace(result, std::regex(R"(^\s+|\s+$)"), "");
+    
+    return result;
+}
 
 SearchResultsPanel::SearchResultsPanel() = default;
 
@@ -140,9 +165,10 @@ GtkWidget* SearchResultsPanel::create_result_item(const SearchResult& result, in
     GtkWidget* score_label = gtk_label_new(score_text);
     gtk_box_append(GTK_BOX(box), score_label);
     
-    // Snippet
+    // Snippet - clean it for display first
     if (!result.snippet.empty()) {
-        GtkWidget* snippet_label = gtk_label_new(result.snippet.c_str());
+        std::string cleaned_snippet = clean_snippet_for_display(result.snippet);
+        GtkWidget* snippet_label = gtk_label_new(cleaned_snippet.c_str());
         gtk_label_set_ellipsize(GTK_LABEL(snippet_label), PANGO_ELLIPSIZE_END);
         gtk_label_set_max_width_chars(GTK_LABEL(snippet_label), 40);
         gtk_widget_set_halign(snippet_label, GTK_ALIGN_START);
