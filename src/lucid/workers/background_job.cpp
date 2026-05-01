@@ -32,7 +32,11 @@ public:
 
 BackgroundJobManager::BackgroundJobManager()
     : m_impl(new Impl()) {
+    fprintf(stderr, "[BackgroundJobManager] Constructor: Impl created\n");
+    fflush(stderr);
     LUCID_INFO("BackgroundJobManager created");
+    fprintf(stderr, "[BackgroundJobManager] Constructor: done\n");
+    fflush(stderr);
 }
 
 BackgroundJobManager::~BackgroundJobManager() {

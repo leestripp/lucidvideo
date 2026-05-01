@@ -65,60 +65,105 @@ MainWindow::MainWindow()
     } else {
         LUCID_WARN("[MainWindow] No embedding model selected - semantic search disabled");
     }
-
+    
+    // Force flush stderr to ensure we see this
+    fprintf(stderr, "[MainWindow] About to create BackgroundJobManager...\n");
+    fflush(stderr);
+    
     m_job_manager = std::make_unique<BackgroundJobManager>();
+    LUCID_INFO("[MainWindow] BackgroundJobManager created");
+    
+    // Force flush stderr
+    fprintf(stderr, "[MainWindow] About to create QueryParser...\n");
+    fflush(stderr);
     
     // Initialize query parser and LLM enhancer
+    LUCID_INFO("[MainWindow] Creating QueryParser...");
     m_query_parser = std::make_unique<QueryParser>();
-    m_llm_enhancer = std::make_unique<LLMQueryEnhancer>();
+    LUCID_INFO("[MainWindow] QueryParser created");
     
-    // Initialize UI components (create them first)
+    // Force flush stderr
+    fprintf(stderr, "[MainWindow] About to create LLMQueryEnhancer...\n");
+    fflush(stderr);
+    
+    LUCID_INFO("[MainWindow] Creating LLMQueryEnhancer...");
+    m_llm_enhancer = std::make_unique<LLMQueryEnhancer>();
+    LUCID_INFO("[MainWindow] LLMQueryEnhancer created");
+    
+    // Force flush stderr
+    fprintf(stderr, "[MainWindow] About to create SettingsPage...\n");
+    fflush(stderr);
+    
+    LUCID_INFO("[MainWindow] Creating SettingsPage...");
     m_settings_page = std::make_unique<SettingsPage>();
+    LUCID_INFO("[MainWindow] SettingsPage created");
+    
+    LUCID_INFO("[MainWindow] Creating ModelHubPage...");
     m_model_hub_page = std::make_unique<ModelHubPage>();
+    LUCID_INFO("[MainWindow] ModelHubPage created");
+    
+    LUCID_INFO("[MainWindow] Creating VideoList...");
     m_video_grid = std::make_unique<VideoList>();
+    LUCID_INFO("[MainWindow] VideoList created");
+    
+    LUCID_INFO("[MainWindow] Creating SearchResultsPanel...");
     m_search_panel = std::make_unique<SearchResultsPanel>();
-    m_analysis_queue_panel = std::make_unique<AnalysisQueuePanel>();  // 🔄 NEW
-    m_timeline_widget = std::make_unique<TimelineWidget>();  // 🔄 NEW - Timeline Widget
-    m_video_player_widget = std::make_unique<VideoPlayerWidget>();  // 🔄 NEW - Video Player Widget
-    m_marker_panel = std::make_unique<MarkerPanel>();  // 🔄 NEW - Marker Panel (renamed from TranscriptionPanel)
+    LUCID_INFO("[MainWindow] SearchResultsPanel created");
+    
+    LUCID_INFO("[MainWindow] Creating AnalysisQueuePanel...");
+    m_analysis_queue_panel = std::make_unique<AnalysisQueuePanel>();
+    LUCID_INFO("[MainWindow] AnalysisQueuePanel created");
+    
+    LUCID_INFO("[MainWindow] Creating TimelineWidget...");
+    m_timeline_widget = std::make_unique<TimelineWidget>();
+    LUCID_INFO("[MainWindow] TimelineWidget created");
+    
+    LUCID_INFO("[MainWindow] Creating VideoPlayerWidget...");
+    m_video_player_widget = std::make_unique<VideoPlayerWidget>();
+    LUCID_INFO("[MainWindow] VideoPlayerWidget created");
+    
+    LUCID_INFO("[MainWindow] Creating MarkerPanel...");
+    m_marker_panel = std::make_unique<MarkerPanel>();
+    LUCID_INFO("[MainWindow] MarkerPanel created");
     
     // Initialize LLM engine and chat session for chat panel
+    LUCID_INFO("[MainWindow] Creating LLMEngine...");
     m_llm_engine = std::make_unique<LLMEngine>();
+    LUCID_INFO("[MainWindow] LLMEngine created");
+    
+    LUCID_INFO("[MainWindow] Creating ChatSession...");
     m_chat_session = std::make_unique<ChatSession>();
-    m_chat_session->set_engine(m_llm_engine.get());
+    LUCID_INFO("[MainWindow] ChatSession created");
     
     // Initialize ChatContext for video library integration
-    LUCID_DEBUG("[MainWindow] Creating ChatContext...");
+    LUCID_INFO("[MainWindow] Creating ChatContext...");
     m_chat_context = std::make_unique<ChatContext>(m_db.get(), m_search.get());
-    LUCID_DEBUG("[MainWindow] ChatContext created");
+    LUCID_INFO("[MainWindow] ChatContext created");
     
-    // Wire LLM query enhancer to the engine
-    m_llm_enhancer->set_engine(m_llm_engine.get());
-    
-    // Set up system prompt for video library assistant
-    // This base prompt will be enhanced with video context in on_chat_message_submitted
-    LUCID_DEBUG("[MainWindow] Setting system message...");
+    LUCID_INFO("[MainWindow] Setting system message...");
+    m_chat_session->set_engine(m_llm_engine.get());
     m_chat_session->set_system_message(
         "You are a helpful assistant for a video library application called Lucid. "
         "You can help users find videos, answer questions about their library, and provide information. "
         "Keep responses concise and helpful. "
         "When users ask about videos or search for content, be specific and reference actual video titles from their library.");
-    LUCID_DEBUG("[MainWindow] System message set");
+    LUCID_INFO("[MainWindow] System message set");
     
     // Setup UI
-    LUCID_DEBUG("[MainWindow] Calling setup_ui()...");
+    LUCID_INFO("[MainWindow] Calling setup_ui()...");
     setup_ui();
-    LUCID_DEBUG("[MainWindow] setup_ui() done");
+    LUCID_INFO("[MainWindow] setup_ui() done");
     
+    LUCID_INFO("[MainWindow] Calling setup_keyboard_shortcuts()...");
     setup_keyboard_shortcuts();
-    LUCID_DEBUG("[MainWindow] setup_keyboard_shortcuts() done");
+    LUCID_INFO("[MainWindow] setup_keyboard_shortcuts() done");
     
     // Initialize UI components after setup_ui() creates containers
-    LUCID_DEBUG("[MainWindow] Initializing settings page...");
+    LUCID_INFO("[MainWindow] Initializing settings page...");
     LUCID_INFO("MainWindow: calling settings_page->initialize()");
     m_settings_page->initialize(nullptr);
     LUCID_INFO("MainWindow: settings_page->initialize() returned");
-    LUCID_DEBUG("[MainWindow] Settings page initialized");
+    LUCID_INFO("[MainWindow] Settings page initialized");
     
     // Sync model selections from ModelManager (which loads from config on startup)
     m_settings_page->sync_from_model_manager();

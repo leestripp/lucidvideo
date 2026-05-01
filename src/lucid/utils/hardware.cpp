@@ -53,18 +53,31 @@ GPUInfo detect_gpu() {
     }
     
     // Check for Vulkan via vulkaninfo or direct detection
+    fprintf(stderr, "[detect_gpu] Checking /dev/dri for GPU devices...\n");
+    fflush(stderr);
+    
     if (!info.available) {
         // Check /dev/dri for GPU devices
         std::error_code ec;
+        fprintf(stderr, "[detect_gpu] Opening /dev/dri directory...\n");
+        fflush(stderr);
+        
         for (const auto& entry : std::filesystem::directory_iterator("/dev/dri", ec)) {
+            fprintf(stderr, "[detect_gpu] Found entry: %s\n", entry.path().c_str());
+            fflush(stderr);
+            
             std::string name = entry.path().filename().string();
             if (name.substr(0, 4) == "card" && name != "card0") {
                 info.available = true;
                 info.name = "GPU " + name;
                 info.supports_vulkan = true;
+                fprintf(stderr, "[detect_gpu] Found GPU: %s\n", info.name.c_str());
+                fflush(stderr);
                 break;
             }
         }
+        fprintf(stderr, "[detect_gpu] /dev/dri scan done, error=%d\n", ec.value());
+        fflush(stderr);
     }
     
     // Try to read VRAM from sysfs (NVIDIA or AMD)
@@ -129,32 +142,72 @@ GPUInfo detect_gpu() {
 // ============================================================================
 
 CPUInfo detect_cpu() {
+    fprintf(stderr, "[detect_cpu] Starting...\n");
+    fflush(stderr);
+    
     CPUInfo info;
     
 #ifdef __linux__
+    fprintf(stderr, "[detect_cpu] Opening /proc/cpuinfo...\n");
+    fflush(stderr);
+    
     // Get CPU info from /proc/cpuinfo
     std::ifstream cpu_file("/proc/cpuinfo");
+    fprintf(stderr, "[detect_cpu] File opened, checking is_open...\n");
+    fflush(stderr);
+    
     if (cpu_file.is_open()) {
+        fprintf(stderr, "[detect_cpu] File is open, reading content...\n");
+        fflush(stderr);
+        
         std::string content((std::istreambuf_iterator<char>(cpu_file)),
                            std::istreambuf_iterator<char>());
         cpu_file.close();
+        fprintf(stderr, "[detect_cpu] Content read, size=%zu bytes\n", content.size());
+        fflush(stderr);
+        cpu_file.close();
+        fprintf(stderr, "[detect_cpu] Content read, size=%zu bytes\n", content.size());
+        fflush(stderr);
         
         // Count processor entries (physical cores)
         size_t processor_count = 0;
         size_t pos = 0;
-        while ((pos = content.find("processor", pos)) != std::string::npos) {
-            size_t newline = content.find('\n', pos);
-            if (newline != std::string::npos && content.substr(pos, 11) == "processor") {
-                processor_count++;
-                pos = newline;
+        fprintf(stderr, "[detect_cpu] Starting processor count search on %zu bytes...\n", content.size());
+        fflush(stderr);
+        
+        // More robust processor counting - look for "processor" at start of line
+        // Using a simple string scan to avoid infinite loops
+        while (pos < content.size()) {
+            size_t next_pos = content.find("processor", pos);
+            if (next_pos == std::string::npos) {
+                break;
             }
+            
+            // Check if this is at the start of a line
+            bool at_line_start = (next_pos == 0) || (content[next_pos - 1] == '\n');
+            
+            // Also check what follows - should be a colon and number
+            size_t colon_pos = content.find(':', next_pos);
+            bool followed_by_colon = (colon_pos != std::string::npos) && 
+                                    (colon_pos - next_pos < 15);  // "processor" + some whitespace
+            
+            if (at_line_start && followed_by_colon) {
+                processor_count++;
+            }
+            
+            pos = next_pos + 1;  // Always advance to prevent infinite loop
         }
+        fprintf(stderr, "[detect_cpu] Found %zu processors\n", processor_count);
+        fflush(stderr);
         
         info.logical_cores = processor_count;
         
         // Check for SMT (hyperthreading) by comparing to siblings
         int siblings = 0;
         int cores = 0;
+        
+        fprintf(stderr, "[detect_cpu] Looking for siblings...\n");
+        fflush(stderr);
         
         size_t siblings_pos = content.find("siblings");
         if (siblings_pos != std::string::npos) {
@@ -273,9 +326,13 @@ int get_optimal_compute_threads() {
 }
 
 int get_optimal_io_threads() {
-    // I/O bound tasks benefit from having more threads than cores
-    // since threads block on I/O
+    fprintf(stderr, "[get_optimal_io_threads] Calling detect_cpu()...\n");
+    fflush(stderr);
+    
     CPUInfo cpu = detect_cpu();
+    fprintf(stderr, "[get_optimal_io_threads] detect_cpu() returned\n");
+    fflush(stderr);
+    
     return std::min(cpu.logical_cores, 8);
 }
 

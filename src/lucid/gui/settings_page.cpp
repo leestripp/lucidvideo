@@ -21,12 +21,23 @@ SettingsPage::~SettingsPage() = default;
 void SettingsPage::initialize(GtkWidget* /*parent*/) {
     LUCID_INFO("[SettingsPage] initialize() called - Creating notebook");
     
+    LUCID_INFO("[SettingsPage] initialize - About to call gtk_notebook_new()");
+    fprintf(stderr, "[DEBUG] SettingsPage::initialize - about to call gtk_notebook_new()\n");
+    fflush(stderr);
+    
     // Create notebook for tabs
     m_notebook = gtk_notebook_new();
+    
+    fprintf(stderr, "[DEBUG] SettingsPage::initialize - gtk_notebook_new() returned, m_notebook=%p\n", (void*)m_notebook);
+    fflush(stderr);
+    
+    LUCID_INFO("[SettingsPage] initialize - gtk_notebook_new() returned");
+    
     gtk_widget_set_margin_start(m_notebook, 12);
     gtk_widget_set_margin_end(m_notebook, 12);
     gtk_widget_set_margin_top(m_notebook, 12);
     gtk_widget_set_margin_bottom(m_notebook, 12);
+    LUCID_INFO("[SettingsPage] initialize - margins set on notebook");
     
     // CRITICAL: Load settings from ModelManager FIRST, before creating any widgets
     // This ensures member variables have the correct values when widgets are created
@@ -42,6 +53,9 @@ void SettingsPage::initialize(GtkWidget* /*parent*/) {
     LUCID_INFO("[SettingsPage] initialize() - Setting up performance page");
     setup_performance_page();
     LUCID_INFO("[SettingsPage] initialize() - DONE");
+    
+    fprintf(stderr, "[DEBUG] SettingsPage::initialize - exiting\n");
+    fflush(stderr);
 }
 
 void SettingsPage::setup_general_page() {
@@ -91,6 +105,7 @@ void SettingsPage::setup_general_page() {
 }
 
 void SettingsPage::setup_folders_page() {
+    LUCID_INFO("[SettingsPage] setup_folders_page - Starting");
     GtkWidget* page = gtk_box_new(GTK_ORIENTATION_VERTICAL, 16);
     gtk_widget_set_margin_start(page, 12);
     gtk_widget_set_margin_end(page, 12);
@@ -128,6 +143,7 @@ void SettingsPage::setup_folders_page() {
     gtk_box_append(GTK_BOX(page), add_btn);
     
     gtk_notebook_append_page(GTK_NOTEBOOK(m_notebook), page, gtk_label_new("Folders"));
+    LUCID_INFO("[SettingsPage] setup_folders_page - DONE");
 }
 
 void SettingsPage::setup_models_page() {
@@ -136,7 +152,13 @@ void SettingsPage::setup_models_page() {
 }
 
 void SettingsPage::setup_performance_page() {
+    fprintf(stderr, "[DEBUG] setup_performance_page - starting\n");
+    fflush(stderr);
+    
     GtkWidget* page = gtk_box_new(GTK_ORIENTATION_VERTICAL, 16);
+    fprintf(stderr, "[DEBUG] setup_performance_page - created page box\n");
+    fflush(stderr);
+    
     gtk_widget_set_margin_start(page, 12);
     gtk_widget_set_margin_end(page, 12);
     gtk_widget_set_margin_top(page, 12);
@@ -165,8 +187,14 @@ void SettingsPage::setup_performance_page() {
     gtk_widget_set_halign(hw_title, GTK_ALIGN_START);
     gtk_box_append(GTK_BOX(page), hw_title);
     
+    fprintf(stderr, "[DEBUG] setup_performance_page - detecting CPU\n");
+    fflush(stderr);
+    
     // CPU Info
     lucid::hardware::CPUInfo cpu = lucid::hardware::detect_cpu();
+    fprintf(stderr, "[DEBUG] setup_performance_page - CPU detected: %s\n", cpu.model_name.c_str());
+    fflush(stderr);
+    
     std::string cpu_text = "CPU: " + cpu.model_name + 
                           " (" + std::to_string(cpu.physical_cores) + " cores, " +
                           std::to_string(cpu.logical_cores) + " threads)";
@@ -176,8 +204,13 @@ void SettingsPage::setup_performance_page() {
     gtk_box_append(GTK_BOX(page), cpu_label);
     m_perf_cpu_label = cpu_label;
     
+    fprintf(stderr, "[DEBUG] setup_performance_page - detecting GPU\n");
+    fflush(stderr);
+    
     // GPU Info
     lucid::hardware::GPUInfo gpu = lucid::hardware::detect_gpu();
+    fprintf(stderr, "[DEBUG] setup_performance_page - GPU detected: available=%d\n", gpu.available);
+    fflush(stderr);
     std::string gpu_text = "GPU: ";
     if (gpu.available) {
         gpu_text += gpu.name + " (" + gpu.vendor + ")";
@@ -274,9 +307,11 @@ void SettingsPage::setup_performance_page() {
 }
 
 void SettingsPage::load_settings() {
+    LUCID_INFO("[SettingsPage] load_settings - Starting");
     // Only sync member variables from ModelManager (which loaded config from file)
     // Widgets may not exist yet - UI will be updated when widgets are created
     sync_from_model_manager();
+    LUCID_INFO("[SettingsPage] load_settings - sync_from_model_manager returned");
 }
 
 void SettingsPage::add_folder_row(const std::string& path) {

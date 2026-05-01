@@ -9,38 +9,60 @@ ThreadPool::ThreadPool(int n_io_threads, int n_compute_threads)
     : m_n_io_threads(n_io_threads)
     , m_n_compute_threads(n_compute_threads) {
     
+    fprintf(stderr, "[ThreadPool] Constructor: n_io_threads=%d, n_compute_threads=%d\n", n_io_threads, n_compute_threads);
+    fflush(stderr);
+    
     // If default values (0), use hardware-optimized counts
     if (m_n_io_threads <= 0) {
+        fprintf(stderr, "[ThreadPool] Detecting optimal I/O threads...\n");
+        fflush(stderr);
         m_n_io_threads = hardware::get_optimal_io_threads();
+        fprintf(stderr, "[ThreadPool] Optimal I/O threads: %d\n", m_n_io_threads);
+        fflush(stderr);
     }
     if (m_n_compute_threads <= 0) {
+        fprintf(stderr, "[ThreadPool] Detecting optimal compute threads...\n");
+        fflush(stderr);
         m_n_compute_threads = hardware::get_optimal_compute_threads();
+        fprintf(stderr, "[ThreadPool] Optimal compute threads: %d\n", m_n_compute_threads);
+        fflush(stderr);
     }
     
     // Clamp to reasonable limits
     m_n_io_threads = std::max(1, std::min(8, m_n_io_threads));
     m_n_compute_threads = std::max(1, std::min(16, m_n_compute_threads));
     
+    fprintf(stderr, "[ThreadPool] Final: %d I/O threads, %d compute threads\n", m_n_io_threads, m_n_compute_threads);
+    fflush(stderr);
+    
     LUCID_INFO("Creating ThreadPool: %d I/O threads, %d compute threads (adaptive)", 
                n_io_threads, n_compute_threads);
     
     // Create I/O workers
-    for (int i = 0; i < n_io_threads; ++i) {
+    fprintf(stderr, "[ThreadPool] Creating %d I/O worker threads...\n", m_n_io_threads);
+    fflush(stderr);
+    for (int i = 0; i < m_n_io_threads; ++i) {
         m_io_workers.emplace_back([this, i]() {
             LUCID_DEBUG("I/O worker thread %d started", i);
             io_worker_loop();
             LUCID_DEBUG("I/O worker thread %d stopped", i);
         });
     }
+    fprintf(stderr, "[ThreadPool] I/O workers created\n");
+    fflush(stderr);
     
     // Create compute workers
-    for (int i = 0; i < n_compute_threads; ++i) {
+    fprintf(stderr, "[ThreadPool] Creating %d compute worker threads...\n", m_n_compute_threads);
+    fflush(stderr);
+    for (int i = 0; i < m_n_compute_threads; ++i) {
         m_compute_workers.emplace_back([this, i]() {
             LUCID_DEBUG("Compute worker thread %d started", i);
             compute_worker_loop();
             LUCID_DEBUG("Compute worker thread %d stopped", i);
         });
     }
+    fprintf(stderr, "[ThreadPool] Compute workers created\n");
+    fflush(stderr);
 }
 
 ThreadPool::~ThreadPool() {
