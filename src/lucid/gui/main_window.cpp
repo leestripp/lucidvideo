@@ -1711,53 +1711,38 @@ void MainWindow::register_analysis_callbacks(Glib::RefPtr<LucidApp> app) {
         
         // Set clear all data callback
         m_analysis_queue_panel->set_clear_all_callback([this, app]() {
-            LUCID_DEBUG("Deleting all database entries...");
+            LUCID_INFO("CLEAR ALL: Killing video processing and clearing database...");
             
-            // Check if analysis is currently in progress
+            // IMMEDIATELY kill all processing threads - NO GRACEFUL WAIT
             auto worker = app->get_analysis_worker();
-            if (worker && worker->is_processing()) {
-                LUCID_INFO("Analysis in progress - requesting cancel and waiting for stop...");
-                
-                // Request cancel first
-                worker->request_cancel();
-                
-                // Wait for processing to stop (with timeout)
-                int wait_count = 0;
-                const int max_wait = 30;  // Max 30 seconds wait
-                while (worker->is_processing() && wait_count < max_wait) {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                    wait_count++;
-                }
-                
-                if (worker->is_processing()) {
-                    LUCID_WARN("Could not stop analysis in time - proceeding anyway may cause crash");
-                    // Force stop by setting stop flag
-                    worker->stop();
-                    std::this_thread::sleep_for(std::chrono::milliseconds(500));
-                }
-                
-                LUCID_INFO("Analysis stopped, proceeding with database clear");
+            if (worker) {
+                LUCID_INFO("CLEAR ALL: Forcing worker stop - KILLING THREADS");
+                worker->stop();  // This kills the threads immediately
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));  // Brief pause for cleanup
+                worker->restart();  // RESTART - clear all flags so new videos can be processed
+                LUCID_INFO("CLEAR ALL: Worker threads killed and restarted");
             }
             
+            // Delete ALL videos and all associated data from database
             if (m_db) {
-                // Delete ALL videos and all associated data
                 m_db->delete_all_videos();
-                LUCID_INFO("All database entries deleted - videos removed from library");
+                LUCID_INFO("CLEAR ALL: All database entries deleted");
             }
             
-            // Refresh the queue panel
+            // Clear the Analysis Queue panel display
             if (m_analysis_queue_panel) {
                 m_analysis_queue_panel->refresh();
-                if (m_db) {
-                    QueueStats stats;
-                    stats.total_videos = 0;
-                    stats.pending = 0;
-                    stats.completed = 0;
-                    stats.failed = 0;
-                    stats.total_markers = 0;
-                    m_analysis_queue_panel->update_stats(stats);
-                }
+                QueueStats stats;
+                stats.total_videos = 0;
+                stats.pending = 0;
+                stats.completed = 0;
+                stats.failed = 0;
+                stats.total_markers = 0;
+                m_analysis_queue_panel->update_stats(stats);
+                LUCID_INFO("CLEAR ALL: Analysis Queue panel cleared");
             }
+            
+            LUCID_INFO("CLEAR ALL: Complete - database cleared, queue emptied");
         });
         
         // Set cancel callback

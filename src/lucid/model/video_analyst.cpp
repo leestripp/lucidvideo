@@ -532,7 +532,8 @@ bool VideoAnalyst::init_vision_scanner(const std::string& model_path,
 std::vector<VisionAnalysis> VideoAnalyst::scan_thumbnails_with_vision(
     const std::string& video_id,
     const std::vector<ThumbnailEntry>& thumbnails,
-    std::function<void(double)> progress_callback) {
+    std::function<void(double)> progress_callback,
+    std::function<bool()> cancel_callback) {
     
     std::vector<VisionAnalysis> results;
     
@@ -595,6 +596,12 @@ std::vector<VisionAnalysis> VideoAnalyst::scan_thumbnails_with_vision(
     size_t processed = 0;
     
     while (processed < to_analyze.size()) {
+        // Check for cancellation before processing each batch
+        if (cancel_callback && cancel_callback()) {
+            LUCID_INFO("Vision scan cancelled by user");
+            break;
+        }
+        
         size_t end = std::min(processed + batch_size, to_analyze.size());
         std::vector<std::pair<std::string, int64_t>> batch(to_analyze.begin() + processed, to_analyze.begin() + end);
         

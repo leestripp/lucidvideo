@@ -177,7 +177,8 @@ public:
     std::vector<VisionAnalysis> scan_thumbnails_with_vision(
         const std::string& video_id,
         const std::vector<ThumbnailEntry>& thumbnails,
-        std::function<void(double)> progress_callback = nullptr);
+        std::function<void(double)> progress_callback = nullptr,
+        std::function<bool()> cancel_callback = nullptr);
     
 private:
     Database& m_db;

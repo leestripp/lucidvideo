@@ -41,6 +41,10 @@ void VideoAnalysisWorker::stop() {
     }
     
     LUCID_INFO("VideoAnalysisWorker: Stopping worker thread");
+    
+    // Request cancellation FIRST to stop any ongoing processing
+    // This will cause process_next_video() to return at next checkpoint
+    m_cancel_requested = true;
     m_stop_requested = true;
     m_cv.notify_one();
     
@@ -48,8 +52,42 @@ void VideoAnalysisWorker::stop() {
         m_worker_thread.join();
     }
     
+    // Clean up: reset current video if still processing
+    if (m_current_video_id.has_value()) {
+        LUCID_INFO("VideoAnalysisWorker: Cleaning up after stop - resetting video state");
+        auto video_id = *m_current_video_id;
+        m_current_video_id.reset();
+        m_current_phase = "";
+        m_current_progress = 0.0f;
+        m_cancel_requested = false;
+    }
+    
     m_running = false;
     LUCID_INFO("VideoAnalysisWorker: Worker thread stopped");
+}
+
+void VideoAnalysisWorker::restart() {
+    LUCID_INFO("VideoAnalysisWorker: Restarting worker - clearing all flags");
+    
+    // Stop first if still running
+    if (m_running.load()) {
+        stop();
+    }
+    
+    // Clear ALL flags - this is the key fix for cancel issues
+    m_cancel_requested.store(false);
+    m_stop_requested.store(false);
+    m_paused.store(false);
+    m_check_requested = false;
+    
+    // Clear current video state
+    m_current_video_id.reset();
+    m_current_phase = "";
+    m_current_progress = 0.0f;
+    
+    // Start fresh
+    start();
+    LUCID_INFO("VideoAnalysisWorker: Restart complete - ready for new videos");
 }
 
 void VideoAnalysisWorker::trigger_check() {
@@ -161,6 +199,14 @@ void VideoAnalysisWorker::process_next_video() {
     
     std::string video_id = *m_current_video_id;
     
+    // Check for cancellation at start
+    if (m_cancel_requested.load()) {
+        LUCID_INFO("VideoAnalysisWorker: Cancel requested - stopping before processing video: %s", video_id.c_str());
+        clear_cancel_request();
+        mark_video_failed(video_id, "Analysis cancelled by user");
+        return;
+    }
+    
     // Get video from database
     auto video_opt = m_library.get_video(video_id);
     if (!video_opt.has_value()) {
@@ -249,6 +295,15 @@ void VideoAnalysisWorker::process_next_video() {
     LUCID_INFO("VideoAnalysisWorker: Pass 1 complete - %d thumbnails, %d audio markers, %d vision markers",
                pass1_result->thumbnail_count, pass1_result->audio_marker_count, pass1_result->vision_marker_count);
     
+    // Check for cancellation after Pass 1
+    if (m_cancel_requested.load()) {
+        LUCID_INFO("VideoAnalysisWorker: Cancel requested - stopping after Pass 1, clearing video data");
+        clear_cancel_request();
+        // Delete the video from database to clear partial data
+        m_library.delete_video(video_id);
+        return;
+    }
+    
     // Update video thumbnail to first thumbnail path after Pass 1
     if (!pass1_result->thumbnails.empty()) {
         LUCID_DEBUG("VideoAnalysisWorker: Setting video thumbnail to first thumbnail");
@@ -257,6 +312,16 @@ void VideoAnalysisWorker::process_next_video() {
     
     // Mark video as complete after Pass 1 - UI will show thumbnails immediately
     mark_video_completed(video_id);
+    
+    // Check for cancellation before starting Pass 2
+    if (m_cancel_requested.load()) {
+        LUCID_INFO("VideoAnalysisWorker: Cancel requested - stopping before Pass 2");
+        clear_cancel_request();
+        // Video was already marked complete by Pass 1, so reset to pending
+        // This allows user to restart analysis from beginning
+        m_library.update_status(video_id, VideoStatus::PENDING);
+        return;
+    }
     
     // =========================================================================
     // Pass 2: Vision enhancement (runs in background after UI update)
@@ -291,9 +356,12 @@ void VideoAnalysisWorker::process_next_video() {
         };
         
         // scan_thumbnails_with_vision creates markers WITH actual descriptions from the model
+        // Pass cancel callback to allow stopping during batch processing
         std::vector<VisionAnalysis> vision_results;
         try {
-            vision_results = analyst.scan_thumbnails_with_vision(video_id, thumbnails, vision_progress_cb);
+            vision_results = analyst.scan_thumbnails_with_vision(
+                video_id, thumbnails, vision_progress_cb,
+                [this]() { return m_cancel_requested.load(); });
         } catch (const std::exception& e) {
             LUCID_ERROR("[VideoAnalysisWorker] Pass 2 vision scan threw exception: %s", e.what());
             vision_results = {};
@@ -303,6 +371,14 @@ void VideoAnalysisWorker::process_next_video() {
         }
         
         LUCID_INFO("VideoAnalysisWorker: Pass 2 complete - %zu vision analyses created", vision_results.size());
+        
+        // Check for cancellation after Pass 2
+        if (m_cancel_requested.load()) {
+            LUCID_INFO("VideoAnalysisWorker: Cancel requested - stopping after Pass 2");
+            clear_cancel_request();
+            // Video is complete with both passes, keep as is
+            return;
+        }
         
         // Trigger UI refresh if any markers were created
         if (!vision_results.empty() && m_vision_update_callback) {

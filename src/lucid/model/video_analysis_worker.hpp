@@ -55,6 +55,9 @@ public:
     void start();
     void stop();
     
+    // Restart the worker (after stop) - clears flags and starts fresh
+    void restart();
+    
     // Check if running
     bool is_running() const { return m_running.load(); }
     

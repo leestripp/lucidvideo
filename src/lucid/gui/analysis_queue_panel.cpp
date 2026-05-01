@@ -338,8 +338,24 @@ void AnalysisQueuePanel::update_overall_progress(int completed, int total) {
 }
 
 void AnalysisQueuePanel::refresh() {
+    // Clear pending list
     update_pending_list();
+    
+    // Clear recent completions
     clear_recent();
+    
+    // Clear current job display - THIS IS THE KEY for Cancel button
+    m_current_video_id.clear();
+    m_current_video_title.clear();
+    m_current_pass_state = PassState::PENDING;
+    m_current_phase.clear();
+    m_current_progress = 0.0f;
+    m_vision_analyzed_count = 0;
+    m_vision_total_count = 0;
+    m_thumbnail_count = 0;
+    m_audio_marker_count = 0;
+    m_vision_marker_count = 0;
+    update_current_job_display();
     
     // Also refresh stats if callback is available
     if (m_stats_callback) {
