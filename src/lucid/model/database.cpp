@@ -62,6 +62,7 @@ Database::Database(const std::string& db_path)
     }
     
     sqlite3_exec(m_db, "PRAGMA foreign_keys = ON;", nullptr, nullptr, nullptr);
+    sqlite3_exec(m_db, "PRAGMA busy_timeout = 5000;", nullptr, nullptr, nullptr);  // 5 second timeout for database locks
     initialize_schema();
     initialize_vec_extension();
 }

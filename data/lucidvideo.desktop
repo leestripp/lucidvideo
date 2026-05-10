@@ -1,7 +1,7 @@
 [Desktop Entry]
 Name=Lucid
 Comment=Intelligent video library with AI-powered search
-Exec=lucid
+Exec=lucidvideo
 Icon=lucidvideo
 Terminal=false
 Type=Application

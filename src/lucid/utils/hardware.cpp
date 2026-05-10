@@ -67,7 +67,7 @@ GPUInfo detect_gpu() {
             fflush(stderr);
             
             std::string name = entry.path().filename().string();
-            if (name.substr(0, 4) == "card" && name != "card0") {
+            if (name.substr(0, 4) == "card") {
                 info.available = true;
                 info.name = "GPU " + name;
                 info.supports_vulkan = true;

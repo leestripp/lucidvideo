@@ -509,15 +509,32 @@ void VideoAnalysisWorker::reset_incomplete_videos() {
     int reset_count = 0;
     
     for (const auto& video : all_videos) {
+        // Reset videos in intermediate states (stale) or completed but missing thumbnails
+        bool should_reset = false;
+        std::string reason;
+        
         if (video.status == VideoStatus::COMPLETED) {
             // Check if this video has thumbnails
             auto thumbnails = m_db.get_thumbnails(video.id);
             if (thumbnails.empty()) {
-                // Video is marked complete but has no thumbnails - reset to pending
-                LUCID_DEBUG("VideoAnalysisWorker: Resetting incomplete video: %s", video.title.c_str());
-                m_library.update_status(video.id, VideoStatus::PENDING);
-                reset_count++;
+                should_reset = true;
+                reason = "completed without thumbnails";
             }
+        } else if (video.status == VideoStatus::THUMBNAILING ||
+                   video.status == VideoStatus::TRANSCRIBING ||
+                   video.status == VideoStatus::ANALYZING ||
+                   video.status == VideoStatus::VISION_SCANNING ||
+                   video.status == VideoStatus::FAILED ||
+                   video.status == VideoStatus::STALE) {
+            // Video got stuck in intermediate state - reset to pending
+            should_reset = true;
+            reason = "stuck in " + std::string(video_status_to_string(video.status));
+        }
+        
+        if (should_reset) {
+            LUCID_DEBUG("VideoAnalysisWorker: Resetting %s (%s)", video.title.c_str(), reason.c_str());
+            m_library.update_status(video.id, VideoStatus::PENDING);
+            reset_count++;
         }
     }
     
