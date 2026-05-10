@@ -1,4 +1,6 @@
 # Build directories
+
+.codemax/
 build/
 cmake-build-*/
 out/
